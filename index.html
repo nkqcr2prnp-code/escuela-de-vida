@@ -500,8 +500,8 @@ textarea { resize:vertical; }
   <!-- ALUMNOS -->
   <div class="section-sep" style="margin-top:16px;"><span>👥 Alumnos</span></div>
   <div class="level-tabs">
-    <button class="level-tab active" id="sup-tab-1" onclick="setSupLevel(1)">Nivel 1</button>
-    <button class="level-tab" id="sup-tab-2" onclick="setSupLevel(2)">Nivel 2</button>
+    <button class="level-tab active" id="sup-tab-1" onclick="setSupLevel(1)">Nivel 1 <span id="sup-count-1"></span></button>
+    <button class="level-tab" id="sup-tab-2" onclick="setSupLevel(2)">Nivel 2 <span id="sup-count-2"></span></button>
   </div>
   <div id="sup-alumnos"></div>
 
@@ -1174,7 +1174,9 @@ function setAttLevel(l) {
 
 function renderAttendance() {
   if (currentRole === 'maestro') { renderAttendanceHistory(); return; }
-  const students = db.students.filter(s => s.level == currentAttLevel);
+  if (currentRole === 'enc1') currentAttLevel = 1;
+  if (currentRole === 'enc2') currentAttLevel = 2;
+  const students = db.students.filter(s => parseInt(s.level) === parseInt(currentAttLevel));
   if (!document.getElementById('att-date').value)
     document.getElementById('att-date').value = new Date().toISOString().split('T')[0];
   document.getElementById('att-count').textContent = students.length + ' alumnos';
@@ -1262,7 +1264,7 @@ function saveAttendance() {
   const notes = document.getElementById('att-notes').value;
   if (!date) { showToast('⚠️ Falta la fecha'); return; }
 
-  const students = db.students.filter(s => s.level == currentAttLevel);
+  const students = db.students.filter(s => parseInt(s.level) === parseInt(currentAttLevel));
   const presentIds = students.filter(s => {
     const btn = document.getElementById('toggle-' + s.id);
     return btn && btn.classList.contains('on');
@@ -1316,10 +1318,13 @@ function setStuLevel(l) {
 }
 
 function renderStudents() {
+  // Ensure level matches role
+  if (currentRole === 'enc1') currentStuLevel = 1;
+  if (currentRole === 'enc2') currentStuLevel = 2;
   const searchEl = document.getElementById('stu-search');
   const q = searchEl ? searchEl.value.toLowerCase().trim() : '';
   const students = db.students.filter(s => {
-    const levelMatch = s.level == currentStuLevel;
+    const levelMatch = parseInt(s.level) === parseInt(currentStuLevel);
     const nameMatch = !q || (s.nombre + ' ' + s.apellido + ' ' + (s.lider||'')).toLowerCase().includes(q);
     return levelMatch && nameMatch;
   });
@@ -1608,7 +1613,7 @@ function getBookPrice(level, module) {
 function getStudentBooks(studentId) { return db.books.filter(b => b.studentId===studentId); }
 
 function renderBooks() {
-  const students = db.students.filter(s => s.level == currentBookLevel);
+  const students = db.students.filter(s => parseInt(s.level) === parseInt(currentBookLevel));
   const lvl = currentBookLevel;
 
   // Summary — SEPARATE per level
@@ -1797,9 +1802,16 @@ function setSupLevel(l) {
 }
 
 function renderSupervision() {
-  // Init level tabs
-  document.getElementById('sup-tab-1')?.classList.toggle('active', supLevel==1);
-  document.getElementById('sup-tab-2')?.classList.toggle('active', supLevel==2);
+  supLevel = 1; // always reset to 1 when entering
+  document.getElementById('sup-tab-1')?.classList.add('active');
+  document.getElementById('sup-tab-2')?.classList.remove('active');
+  // Show counts on tabs
+  const c1 = db.students.filter(s => parseInt(s.level) === 1).length;
+  const c2 = db.students.filter(s => parseInt(s.level) === 2).length;
+  const cnt1 = document.getElementById('sup-count-1');
+  const cnt2 = document.getElementById('sup-count-2');
+  if (cnt1) cnt1.textContent = c1 > 0 ? '('+c1+')' : '';
+  if (cnt2) cnt2.textContent = c2 > 0 ? '('+c2+')' : '';
   renderSupFondos();
   renderSupAlumnos();
   renderSupPendientes();
@@ -1809,7 +1821,7 @@ function renderSupervision() {
 function renderSupFondos() {
   let html = '<div class="stats-row" style="grid-template-columns:1fr 1fr;gap:10px;">';
   [1,2].forEach(lvl => {
-    const students = db.students.filter(s => s.level == lvl);
+    const students = db.students.filter(s => parseInt(s.level) === lvl);
     let recaudado = 0, fiado = 0, vendidos = 0;
     students.forEach(s => {
       db.books.filter(b => b.studentId === s.id).forEach(b => {
@@ -1835,7 +1847,7 @@ function renderSupFondos() {
 
 function renderSupAlumnos() {
   const allStudents = db.students || [];
-  const students = allStudents.filter(s => s.level == supLevel)
+  const students = allStudents.filter(s => parseInt(s.level) === parseInt(supLevel))
     .sort((a,b) => a.apellido.localeCompare(b.apellido));
   if (students.length === 0) {
     document.getElementById('sup-alumnos').innerHTML = `<div class="empty"><div class="empty-icon">👥</div><p>Sin alumnos en Nivel ${supLevel}</p><p class="text-sm" style="color:var(--text2)">Total en BD: ${allStudents.length}</p></div>`;
