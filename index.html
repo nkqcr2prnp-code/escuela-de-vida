@@ -265,6 +265,7 @@ textarea { resize:vertical; }
 
 /* ── ROLE BADGE ── */
 .role-pill { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:20px; font-size:10px; font-weight:700; background:rgba(201,168,76,0.12); border:1px solid var(--border); color:var(--gold); }
+.maestro-only { display:none; }
 </style>
 </head>
 <body>
@@ -486,12 +487,51 @@ textarea { resize:vertical; }
   </div>
 </div>
 
+
+<!-- SUPERVISIÓN (solo maestro) -->
+<div class="screen" id="screen-supervision">
+  <div class="screen-title">Supervisión</div>
+  <div class="screen-sub">Panel del Maestro Principal</div>
+
+  <!-- FONDOS -->
+  <div class="card-title" style="margin-bottom:10px;">💰 Fondos por Nivel</div>
+  <div id="sup-fondos"></div>
+
+  <!-- ALUMNOS -->
+  <div class="section-sep" style="margin-top:16px;"><span>👥 Alumnos</span></div>
+  <div class="level-tabs">
+    <button class="level-tab active" id="sup-tab-1" onclick="setSupLevel(1)">Nivel 1</button>
+    <button class="level-tab" id="sup-tab-2" onclick="setSupLevel(2)">Nivel 2</button>
+  </div>
+  <div id="sup-alumnos"></div>
+
+  <!-- PENDIENTES DE CURSADAS ANTERIORES -->
+  <div class="section-sep" style="margin-top:16px;"><span>📋 Pendientes cursadas anteriores</span></div>
+  <div id="sup-pendientes"></div>
+
+  <!-- HISTORIAL CURSADAS -->
+  <div class="section-sep" style="margin-top:16px;"><span>🗂️ Historial de cursadas</span></div>
+  <div id="sup-historial"></div>
+
+  <!-- CIERRE DE CURSADA -->
+  <div class="section-sep" style="margin-top:16px;"><span>⚙️ Acciones</span></div>
+  <div class="card">
+    <div class="card-title">🔄 Resetear clases registradas</div>
+    <p class="text-sm" style="margin-bottom:12px;">Borra solo las asistencias registradas, sin tocar los alumnos ni cuadernillos.</p>
+    <button class="btn btn-outline btn-full" onclick="resetClases()" style="margin-bottom:10px;">🗑️ Borrar asistencias</button>
+    <div class="card-title" style="margin-top:8px;">✝ Cerrar cursada</div>
+    <p class="text-sm" style="margin-bottom:12px;">Mueve alumnos sin diploma a Pendientes, archiva la cursada y resetea para la nueva.</p>
+    <button class="btn btn-red btn-full" onclick="cerrarCursada()">🎓 Cerrar cursada y archivar</button>
+  </div>
+</div>
+
 </main>
 
 <!-- ════ BOTTOM NAV ════ -->
 <nav class="bottom-nav">
   <button class="nav-item active" id="nav-home" onclick="goTo('screen-home')"><span class="nav-icon">🏠</span><span>Inicio</span></button>
   <button class="nav-item enc-only" id="nav-attendance" onclick="goTo('screen-attendance')"><span class="nav-icon">✅</span><span>Asistencia</span></button>
+  <button class="nav-item maestro-only" id="nav-supervision" onclick="goTo('screen-supervision')"><span class="nav-icon">👑</span><span>Supervisión</span></button>
   <button class="nav-item" id="nav-students" onclick="goTo('screen-students')"><span class="nav-icon">👥</span><span>Alumnos</span></button>
   <button class="nav-item" id="nav-books" onclick="goTo('screen-books')"><span class="nav-icon">📚</span><span>Cuadernillos</span></button>
   <button class="nav-item" id="nav-reports" onclick="goTo('screen-reports')"><span class="nav-icon">📊</span><span>Informes</span></button>
@@ -686,7 +726,9 @@ let db = {
   attendance: [],
   books: [],
   config: { ciclo: '2025' },
-  pins: { maestro: '0000', enc1: '0000', enc2: '0000' }
+  pins: { maestro: '0000', enc1: '0000', enc2: '0000' },
+  pendientes: [],      // alumnos que deben clases de cursadas anteriores
+  cursadas: []         // historial de cursadas cerradas
 };
 
 // Firebase
@@ -744,6 +786,8 @@ function save() {
       attendance: db.attendance,
       books: db.books,
       config: db.config,
+      pendientes: db.pendientes || [],
+      cursadas: db.cursadas || [],
       // pins stay local only for security
     }).catch(e => console.warn('Firebase write error:', e));
   }, 600);
@@ -759,6 +803,8 @@ function load() {
       db.students = data.students || [];
       db.attendance = data.attendance || [];
       db.books = data.books || [];
+      db.pendientes = data.pendientes || [];
+      db.cursadas = data.cursadas || [];
       if (data.config) db.config = { ...db.config, ...data.config };
       saveLocal();
     }
@@ -790,6 +836,8 @@ function startRealtimeSync() {
     db.students = data.students || [];
     db.attendance = data.attendance || [];
     db.books = data.books || [];
+    db.pendientes = data.pendientes || [];
+    db.cursadas = data.cursadas || [];
     if (data.config) db.config = { ...db.config, ...data.config };
     saveLocal();
     // Refresh UI silently
@@ -881,6 +929,10 @@ function applyRoleRestrictions() {
   document.querySelectorAll('.enc-only').forEach(el => {
     el.style.display = isMaestro ? 'none' : '';
   });
+  // Maestro-only elements
+  document.querySelectorAll('.maestro-only').forEach(el => {
+    el.style.display = isMaestro ? '' : 'none';
+  });
 
   // Pantalla asistencia para maestro: convertir en historial
   if (isMaestro) {
@@ -954,7 +1006,7 @@ function goTo(screenId) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const key = screenId.replace('screen-', '');
   document.getElementById('nav-' + key)?.classList.add('active');
-  const titles = { home:'Panel Principal', attendance:'Asistencia', students:'Alumnos', books:'Cuadernillos', reports:'Informes' };
+  const titles = { home:'Panel Principal', attendance:'Asistencia', students:'Alumnos', books:'Cuadernillos', reports:'Informes', supervision:'Supervisión' };
   document.getElementById('topbar-sub').textContent = titles[key] || 'M.I.R.A.';
 
   if (screenId === 'screen-home') renderHome();
@@ -962,6 +1014,7 @@ function goTo(screenId) {
   if (screenId === 'screen-students') renderStudents();
   if (screenId === 'screen-books') renderBooks();
   if (screenId === 'screen-reports') renderReports();
+  if (screenId === 'screen-supervision') renderSupervision();
 }
 
 function showModal(id) { document.getElementById(id).classList.remove('hidden'); }
@@ -1574,6 +1627,210 @@ function saveBookPayment() {
     if (idx>=0) db.books[idx]=rec; else db.books.push(rec);
   });
   save(); hideModal('modal-book-payment'); showToast('✅ Cuadernillos guardados'); renderBooks();
+}
+
+
+// ══════════════════════════════════
+// SUPERVISION (MAESTRO)
+// ══════════════════════════════════
+let supLevel = 1;
+
+function setSupLevel(l) {
+  supLevel = l;
+  document.getElementById('sup-tab-1').classList.toggle('active', l==1);
+  document.getElementById('sup-tab-2').classList.toggle('active', l==2);
+  renderSupAlumnos();
+}
+
+function renderSupervision() {
+  renderSupFondos();
+  renderSupAlumnos();
+  renderSupPendientes();
+  renderSupHistorial();
+}
+
+function renderSupFondos() {
+  let html = '<div class="stats-row" style="grid-template-columns:1fr 1fr;gap:10px;">';
+  [1,2].forEach(lvl => {
+    const students = db.students.filter(s => s.level == lvl);
+    let recaudado = 0, fiado = 0, vendidos = 0;
+    students.forEach(s => {
+      db.books.filter(b => b.studentId === s.id).forEach(b => {
+        const price = getBookPrice(lvl, b.module);
+        if (b.status === 'paid') { recaudado += price; vendidos++; }
+        else if (b.status === 'credit') {
+          recaudado += (b.amountPaid||0);
+          fiado += price - (b.amountPaid||0);
+          vendidos++;
+        }
+      });
+    });
+    html += `<div class="card" style="padding:12px;">
+      <div class="card-title" style="margin-bottom:8px;">Nivel ${lvl}</div>
+      <div class="flex-between" style="margin-bottom:4px;"><span class="text-sm">📚 Vendidos</span><span class="fw700">${vendidos}</span></div>
+      <div class="flex-between" style="margin-bottom:4px;"><span class="text-sm">💵 Recaudado</span><span class="paid-amount fw700">$${recaudado.toLocaleString()}</span></div>
+      <div class="flex-between"><span class="text-sm">💳 Fiado</span><span class="debt-amount fw700">$${fiado.toLocaleString()}</span></div>
+    </div>`;
+  });
+  html += '</div>';
+  document.getElementById('sup-fondos').innerHTML = html;
+}
+
+function renderSupAlumnos() {
+  const students = db.students.filter(s => s.level == supLevel)
+    .sort((a,b) => a.apellido.localeCompare(b.apellido));
+  if (students.length === 0) {
+    document.getElementById('sup-alumnos').innerHTML = '<div class="empty"><div class="empty-icon">👥</div><p>Sin alumnos</p></div>';
+    return;
+  }
+  document.getElementById('sup-alumnos').innerHTML = '<div class="card" style="padding:8px 16px;">' +
+    students.map(s => {
+      const atts = getStudentAttendances(s.id);
+      const ok = atts.present >= DIPLOMA_MIN[s.level];
+      return `<div class="list-item">
+        <div class="list-item-main">
+          <div class="list-item-name">${s.apellido}, ${s.nombre}</div>
+          <div class="list-item-sub">
+            ${s.lider ? '🏠 '+s.lider+' &nbsp;·&nbsp; ' : ''}
+            ${s.red == 0 ? 'Sin red' : 'Red '+s.red}
+          </div>
+        </div>
+        <span class="badge ${ok?'badge-green':'badge-red'}">${atts.present}/${12}</span>
+      </div>`;
+    }).join('') + '</div>';
+}
+
+function renderSupPendientes() {
+  const pend = db.pendientes || [];
+  if (pend.length === 0) {
+    document.getElementById('sup-pendientes').innerHTML = '<div class="text-sm" style="color:var(--text2);padding:8px 0;">Sin pendientes de cursadas anteriores</div>';
+    return;
+  }
+  // Group by ciclo
+  const byCiclo = {};
+  pend.forEach(p => {
+    const key = p.ciclo || 'Sin ciclo';
+    if (!byCiclo[key]) byCiclo[key] = [];
+    byCiclo[key].push(p);
+  });
+  let html = '';
+  Object.keys(byCiclo).sort().reverse().forEach(ciclo => {
+    html += `<div class="section-sep"><span>Ciclo ${ciclo}</span></div><div class="card" style="padding:8px 16px;">`;
+    byCiclo[ciclo].forEach(p => {
+      const modInfo = [1,2,3].map(m => {
+        const deben = p.debenPorMod?.[m] || 0;
+        return deben > 0 ? `M${m}: ${deben} clase${deben>1?'s':''}` : null;
+      }).filter(Boolean).join(' · ');
+      html += `<div class="list-item">
+        <div class="list-item-main">
+          <div class="list-item-name">${p.apellido}, ${p.nombre}</div>
+          <div class="list-item-sub">N${p.level} · ${p.lider||'Sin líder'} · ${p.red==0?'Sin red':'Red '+p.red}</div>
+          ${modInfo ? `<div class="text-sm" style="color:var(--gold);margin-top:2px;">Debe: ${modInfo}</div>` : ''}
+        </div>
+        <span class="badge ${p.tipo==='recuperar'?'badge-gold':'badge-red'}">${p.tipo==='recuperar'?'Recuperar':'Repetir'}</span>
+      </div>`;
+    });
+    html += '</div>';
+  });
+  document.getElementById('sup-pendientes').innerHTML = html;
+}
+
+function renderSupHistorial() {
+  const hist = db.cursadas || [];
+  if (hist.length === 0) {
+    document.getElementById('sup-historial').innerHTML = '<div class="text-sm" style="color:var(--text2);padding:8px 0;">Sin cursadas archivadas aún</div>';
+    return;
+  }
+  document.getElementById('sup-historial').innerHTML = hist.slice().reverse().map(c => `
+    <div class="card" style="padding:12px 16px;margin-bottom:8px;">
+      <div class="flex-between mb-12">
+        <div class="card-title" style="margin:0;">Ciclo ${c.ciclo}</div>
+        <span class="text-sm">${c.fecha}</span>
+      </div>
+      <div class="stats-row" style="grid-template-columns:repeat(3,1fr);gap:6px;">
+        <div class="stat-box"><div class="stat-num" style="font-size:18px;">${c.totalAlumnos}</div><div class="stat-label">Alumnos</div></div>
+        <div class="stat-box"><div class="stat-num" style="font-size:18px;color:var(--green)">${c.conDiploma}</div><div class="stat-label">Diploma</div></div>
+        <div class="stat-box"><div class="stat-num" style="font-size:18px;color:var(--red)">${c.sinDiploma}</div><div class="stat-label">Sin diploma</div></div>
+      </div>
+    </div>`).join('');
+}
+
+function resetClases() {
+  if (!confirm('¿Borrar todas las asistencias registradas? Los alumnos y cuadernillos se conservan.')) return;
+  db.attendance = [];
+  save();
+  showToast('✅ Asistencias borradas');
+  renderSupervision();
+}
+
+function cerrarCursada() {
+  if (!confirm('¿Cerrar la cursada ' + db.config.ciclo + '? Los alumnos sin diploma pasarán a Pendientes y se archivará el resultado.')) return;
+
+  const allStudents = db.students;
+  const pendientesNuevos = [];
+
+  allStudents.forEach(s => {
+    const atts = getStudentAttendances(s.id);
+    const ok = atts.present >= DIPLOMA_MIN[s.level];
+    if (ok) return; // diploma → no pasa a pendientes
+
+    // Calculate classes owed per module
+    const debenPorMod = {};
+    for (let mod = 1; mod <= 3; mod++) {
+      const sessions = db.attendance.filter(a => a.level == s.level && a.module == mod);
+      const modPresent = sessions.filter(a => a.presentIds.includes(s.id)).length;
+      const modTotal = sessions.length;
+      const modDeben = modTotal - modPresent;
+      if (modDeben > 0) debenPorMod[mod] = modDeben;
+    }
+
+    const tipo = atts.present >= DIPLOMA_MIN[s.level] - 3 ? 'recuperar' : 'repetir';
+    pendientesNuevos.push({
+      id: s.id + '-' + db.config.ciclo,
+      nombre: s.nombre,
+      apellido: s.apellido,
+      level: s.level,
+      red: s.red,
+      lider: s.lider,
+      ciclo: db.config.ciclo,
+      asistencias: atts.present,
+      debenPorMod,
+      tipo
+    });
+  });
+
+  // Archive cursada
+  const totalAlumnos = allStudents.length;
+  const conDiploma = allStudents.filter(s => getStudentAttendances(s.id).present >= DIPLOMA_MIN[s.level]).length;
+  db.cursadas = db.cursadas || [];
+  db.cursadas.push({
+    ciclo: db.config.ciclo,
+    fecha: new Date().toLocaleDateString('es-AR'),
+    totalAlumnos,
+    conDiploma,
+    sinDiploma: totalAlumnos - conDiploma,
+    pendientesGenerados: pendientesNuevos.length
+  });
+
+  // Add to pendientes (avoid duplicates by id)
+  db.pendientes = db.pendientes || [];
+  pendientesNuevos.forEach(p => {
+    if (!db.pendientes.find(x => x.id === p.id)) db.pendientes.push(p);
+  });
+
+  // Reset: remove diplomed students, keep pendientes students as new enrollees
+  db.students = [];
+  db.attendance = [];
+  db.books = [];
+
+  // Bump ciclo year
+  const cicloNum = parseInt(db.config.ciclo) || 2025;
+  db.config.ciclo = String(cicloNum + 1);
+
+  save();
+  showToast('✅ Cursada cerrada · Ciclo ' + db.config.ciclo + ' listo');
+  renderSupervision();
+  renderHome();
 }
 
 // ══════════════════════════════════
