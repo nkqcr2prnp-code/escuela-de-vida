@@ -531,7 +531,7 @@ textarea { resize:vertical; }
 <nav class="bottom-nav">
   <button class="nav-item active" id="nav-home" onclick="goTo('screen-home')"><span class="nav-icon">🏠</span><span>Inicio</span></button>
   <button class="nav-item enc-only" id="nav-attendance" onclick="goTo('screen-attendance')"><span class="nav-icon">✅</span><span>Asistencia</span></button>
-  <button class="nav-item maestro-only" id="nav-supervision" onclick="goTo('screen-supervision')"><span class="nav-icon">👑</span><span>Supervisión</span></button>
+  <button class="nav-item maestro-only" id="nav-supervision" onclick="goTo('screen-supervision')" style="display:none;"><span class="nav-icon">👑</span><span>Supervisión</span></button>
   <button class="nav-item" id="nav-students" onclick="goTo('screen-students')"><span class="nav-icon">👥</span><span>Alumnos</span></button>
   <button class="nav-item" id="nav-books" onclick="goTo('screen-books')"><span class="nav-icon">📚</span><span>Cuadernillos</span></button>
   <button class="nav-item" id="nav-reports" onclick="goTo('screen-reports')"><span class="nav-icon">📊</span><span>Informes</span></button>
@@ -929,10 +929,24 @@ function applyRoleRestrictions() {
   document.querySelectorAll('.enc-only').forEach(el => {
     el.style.display = isMaestro ? 'none' : '';
   });
-  // Maestro-only elements
+  // Maestro-only elements — always force display
   document.querySelectorAll('.maestro-only').forEach(el => {
-    el.style.display = isMaestro ? '' : 'none';
+    el.style.display = isMaestro ? 'flex' : 'none';
   });
+  // For maestro: go directly to supervision on home
+  if (isMaestro) {
+    // Add supervision button to quick actions if not there
+    const qa = document.getElementById('quick-actions');
+    if (qa && !document.getElementById('btn-supervision-quick')) {
+      const btn = document.createElement('button');
+      btn.id = 'btn-supervision-quick';
+      btn.className = 'btn btn-gold';
+      btn.style.gridColumn = '1 / -1';
+      btn.innerHTML = '👑 Panel de Supervisión';
+      btn.onclick = () => goTo('screen-supervision');
+      qa.insertBefore(btn, qa.firstChild);
+    }
+  }
 
   // Pantalla asistencia para maestro: convertir en historial
   if (isMaestro) {
@@ -1005,7 +1019,8 @@ function goTo(screenId) {
   document.getElementById(screenId).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const key = screenId.replace('screen-', '');
-  document.getElementById('nav-' + key)?.classList.add('active');
+  const navEl = document.getElementById('nav-' + key);
+  if (navEl) { navEl.classList.add('active'); navEl.style.display = 'flex'; }
   const titles = { home:'Panel Principal', attendance:'Asistencia', students:'Alumnos', books:'Cuadernillos', reports:'Informes', supervision:'Supervisión' };
   document.getElementById('topbar-sub').textContent = titles[key] || 'M.I.R.A.';
 
