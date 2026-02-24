@@ -965,11 +965,11 @@ function applyRoleRestrictions() {
   document.querySelectorAll('.maestro-only').forEach(el => {
     el.style.display = isMaestro ? 'flex' : 'none';
   });
-  // For maestro: go directly to supervision on home
+  // Supervision quick button — only for maestro
+  const qa = document.getElementById('quick-actions');
+  const existingSupBtn = document.getElementById('btn-supervision-quick');
   if (isMaestro) {
-    // Add supervision button to quick actions if not there
-    const qa = document.getElementById('quick-actions');
-    if (qa && !document.getElementById('btn-supervision-quick')) {
+    if (qa && !existingSupBtn) {
       const btn = document.createElement('button');
       btn.id = 'btn-supervision-quick';
       btn.className = 'btn btn-gold';
@@ -978,6 +978,9 @@ function applyRoleRestrictions() {
       btn.onclick = () => goTo('screen-supervision');
       qa.insertBefore(btn, qa.firstChild);
     }
+  } else {
+    // Remove supervision button for encargados
+    if (existingSupBtn) existingSupBtn.remove();
   }
 
   // Pantalla asistencia para maestro: convertir en historial
