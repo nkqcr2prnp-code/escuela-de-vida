@@ -1386,7 +1386,7 @@ function showStudentDetail(id) {
           </span></div>`;}).join('')}
     ${totalDebt>0 ? `<div class="flex-between mt-8"><span class="fw700">Total deuda:</span><span class="debt-amount">$${totalDebt.toLocaleString()}</span></div>`:''} 
     <div class="divider"></div>
-    ${currentRole !== 'maestro' ? `<button class="btn btn-red btn-sm" onclick="deleteStudent('${s.id}')">🗑️ Eliminar alumno</button>` : ''}
+    <button class="btn btn-red btn-sm" onclick="deleteStudent('${s.id}')">🗑️ Eliminar alumno</button>
   `;
   showModal('modal-student-detail');
 }
