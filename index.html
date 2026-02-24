@@ -1778,30 +1778,27 @@ let longPressFired = false;
 
 function attachLongPress() {
   document.querySelectorAll('.list-item[id^="stu-"]').forEach(el => {
-    // Remove old listeners by cloning
-    const clone = el.cloneNode(true);
-    el.parentNode.replaceChild(clone, el);
-    const sid = clone.id.replace('stu-', '');
+    const sid = el.id.replace('stu-', '');
 
-    clone.addEventListener('touchstart', function(e) {
+    el.addEventListener('touchstart', function(e) {
       longPressFired = false;
+      clearTimeout(longPressTimer);
       longPressTimer = setTimeout(() => {
         longPressFired = true;
         openCtxMenu(sid);
       }, 600);
     }, { passive: true });
 
-    clone.addEventListener('touchend', function(e) {
+    el.addEventListener('touchend', function(e) {
+      clearTimeout(longPressTimer);
       if (longPressFired) {
-        e.preventDefault();
+        longPressFired = false;
         return;
       }
-      clearTimeout(longPressTimer);
-      // Normal tap = view detail
       showStudentDetail(sid);
     });
 
-    clone.addEventListener('touchmove', function() {
+    el.addEventListener('touchmove', function() {
       clearTimeout(longPressTimer);
     }, { passive: true });
   });
