@@ -855,7 +855,9 @@ function load() {
     firebaseReady = true;
     showToast('✅ Sincronizado');
     renderHome();
-    refreshActiveScreen();
+    // Only render students if that screen is active
+    const active = document.querySelector('.screen.active');
+    if (active && active.id === 'screen-students') renderStudents();
   }).catch(e => {
     console.warn('Firebase read error:', e);
     firebaseReady = true;
@@ -868,7 +870,7 @@ function refreshActiveScreen() {
   if (!activeScreen) return;
   const id = activeScreen.id;
   if (id === 'screen-home') renderHome();
-  else if (id === 'screen-students') setTimeout(renderStudents, 200);
+  else if (id === 'screen-students') renderStudents();
   else if (id === 'screen-attendance') renderAttendance();
   else if (id === 'screen-books') renderBooks();
   else if (id === 'screen-reports') renderReports();
@@ -878,6 +880,7 @@ function refreshActiveScreen() {
 // Real-time listener — updates all devices when data changes
 function startRealtimeSync() {
   fbdb.ref('escuela').on('value', snap => {
+    if (!firebaseReady) return;
     const data = snap.val();
     if (!data) return;
     db.students = data.students || [];
@@ -887,8 +890,11 @@ function startRealtimeSync() {
     db.cursadas = data.cursadas || [];
     if (data.config) db.config = { ...db.config, ...data.config };
     saveLocal();
-    // Refresh UI silently — respect current role levels
-    refreshActiveScreen();
+    // Only refresh home silently — other screens render on demand
+    const activeId = document.querySelector('.screen.active')?.id;
+    if (activeId === 'screen-home') renderHome();
+    else if (activeId === 'screen-supervision') renderSupervision();
+    // For students/attendance/books: user sees updated data next time they interact
   });
 }
 
