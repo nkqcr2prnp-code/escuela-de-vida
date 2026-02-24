@@ -1413,12 +1413,16 @@ function renderStudents() {
     byRed[red].forEach(s => {
       const atts = getStudentAttendances(s.id);
       const ok = atts.present >= DIPLOMA_MIN[s.level];
-      out += '<div class="list-item" id="stu-' + s.id + '">' +
+      const canDelete = currentRole !== 'maestro';
+      out += '<div class="list-item" id="stu-' + s.id + '" onclick="showStudentDetail(\'' + s.id + '\')" style="cursor:pointer;">' +
         '<div class="list-item-main">' +
         '<div class="list-item-name">' + s.apellido + ', ' + s.nombre + '</div>' +
         '<div class="list-item-sub">' + (s.lider || 'Sin líder') + ' · ' + atts.present + '/' + TOTAL_CLASSES + '</div>' +
         '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
         '<span class="badge ' + (ok ? 'badge-green' : 'badge-red') + '">' + atts.present + '</span>' +
+        (canDelete ? '<button onclick="event.stopPropagation();deleteStudent(\'' + s.id + '\')" style="background:rgba(231,76,60,0.15);border:1px solid rgba(231,76,60,0.4);border-radius:8px;padding:6px 10px;color:#e74c3c;font-size:16px;cursor:pointer;touch-action:manipulation;">🗑️</button>' : '') +
+        '</div>' +
         '</div>';
     });
     out += '</div>';
@@ -1806,31 +1810,7 @@ let longPressTimer = null;
 let longPressFired = false;
 
 function attachLongPress() {
-  document.querySelectorAll('.list-item[id^="stu-"]').forEach(el => {
-    const sid = el.id.replace('stu-', '');
-
-    el.addEventListener('touchstart', function(e) {
-      longPressFired = false;
-      clearTimeout(longPressTimer);
-      longPressTimer = setTimeout(() => {
-        longPressFired = true;
-        openCtxMenu(sid);
-      }, 600);
-    }, { passive: true });
-
-    el.addEventListener('touchend', function(e) {
-      clearTimeout(longPressTimer);
-      if (longPressFired) {
-        longPressFired = false;
-        return;
-      }
-      showStudentDetail(sid);
-    });
-
-    el.addEventListener('touchmove', function() {
-      clearTimeout(longPressTimer);
-    }, { passive: true });
-  });
+  // Long press replaced by direct trash button — nothing to attach
 }
 
 function handleStudentTap(studentId) {
