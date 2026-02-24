@@ -440,7 +440,7 @@ textarea { resize:vertical; }
     <span class="search-icon">🔍</span>
     <input type="text" id="stu-search" placeholder="Buscar alumno..." oninput="renderStudents()">
   </div>
-  <button class="btn btn-gold btn-full mb-12 enc-only" id="btn-add-student" onclick="showModal('modal-add-student')">+ Agregar Alumno</button>
+  <button class="btn btn-gold btn-full mb-12 enc-only" id="btn-add-student" onclick="openAddStudent()">+ Agregar Alumno</button>
   <div id="students-list"></div>
 </div>
 
@@ -549,7 +549,7 @@ textarea { resize:vertical; }
     <div class="form-group"><label>Nombre</label><input type="text" id="new-nombre" placeholder="Nombre"></div>
     <div class="form-group"><label>Apellido</label><input type="text" id="new-apellido" placeholder="Apellido"></div>
     <div class="form-group">
-      <label>Nivel</label>
+      <label id="new-nivel-label">Nivel</label>
       <select id="new-nivel"><option value="1">Nivel 1</option><option value="2">Nivel 2</option></select>
     </div>
     <div class="form-group">
@@ -1341,7 +1341,7 @@ function renderStudents() {
       const pct = Math.round(atts.present / TOTAL_CLASSES * 100);
       const ok = atts.present >= DIPLOMA_MIN[s.level];
       html += `
-        <div class="list-item" onclick="showStudentDetail('${s.id}')" oncontextmenu="return openCtxMenu(event,'${s.id}')" ontouchstart="startLongPress('${s.id}')" ontouchend="cancelLongPress()" ontouchmove="cancelLongPress()">
+        <div class="list-item" id="stu-${s.id}" onclick="handleStudentTap('${s.id}')" oncontextmenu="return openCtxMenu(event,'${s.id}')">
           <div class="list-item-main">
             <div class="list-item-name">${s.apellido}, ${s.nombre}</div>
             <div class="list-item-sub">${s.lider || 'Sin líder asignado'} · ${atts.present}/${TOTAL_CLASSES} asist.</div>
@@ -1356,6 +1356,26 @@ function renderStudents() {
     html += '</div>';
   });
   document.getElementById('students-list').innerHTML = html;
+  setTimeout(attachLongPress, 100);
+}
+
+function openAddStudent() {
+  // Auto-set nivel based on role
+  const nivelSel = document.getElementById('new-nivel');
+  const nivelLabel = document.getElementById('new-nivel-label');
+  if (currentRole === 'enc1') {
+    nivelSel.value = '1';
+    nivelSel.style.display = 'none';
+    if(nivelLabel) nivelLabel.textContent = 'Nivel: 1 (automático)';
+  } else if (currentRole === 'enc2') {
+    nivelSel.value = '2';
+    nivelSel.style.display = 'none';
+    if(nivelLabel) nivelLabel.textContent = 'Nivel: 2 (automático)';
+  } else {
+    nivelSel.style.display = '';
+    if(nivelLabel) nivelLabel.textContent = 'Nivel';
+  }
+  showModal('modal-add-student');
 }
 
 function addStudent() {
@@ -1419,41 +1439,40 @@ function showStudentDetail(id) {
   }
   gridHtml += '</div>';
 
-  // Build editable module accordion
+  // Build module grid — simple present/absent view + editable for encargados
   const modNames = ['Creciendo Hacia Adentro', 'Creciendo Hacia Arriba', 'Creciendo Hacia Afuera'];
-  let accordionHtml = '';
+  let modsHtml = '';
   for (let mod = 1; mod <= 3; mod++) {
-    let modPresent = 0, modTotal = 0;
+    let modPresent = 0, modAbsent = 0;
     let classesHtml = '';
     for (let cls = 1; cls <= 4; cls++) {
       const session = db.attendance.find(a => a.level == s.level && a.module == mod && a.classNum == cls);
       let state = 'empty';
-      if (session) { modTotal++; state = session.presentIds.includes(s.id) ? 'present' : 'absent'; if(state==='present') modPresent++; }
-      const icons = { present: '✅', absent: '❌', empty: '⬜' };
+      if (session) {
+        state = session.presentIds.includes(s.id) ? 'present' : 'absent';
+        if (state==='present') modPresent++; else modAbsent++;
+      }
+      const icon = state==='present' ? '✅' : state==='absent' ? '❌' : '⬜';
       const canEdit = currentRole !== 'maestro';
-      classesHtml += `<div class="class-btn ${state}" ${canEdit ? `onclick="toggleClassAtt('${s.id}',${s.level},${mod},${cls})"` : ''}>
-        <span class="class-num">Clase ${cls}</span>
-        <span class="class-icon">${icons[state]}</span>
+      classesHtml += `<div class="class-btn ${state}" ${canEdit?`onclick="toggleClassAtt('${s.id}',${s.level},${mod},${cls})"`:''}  style="${canEdit?'cursor:pointer':'cursor:default'}">
+        <span class="class-num">C${cls}</span>
+        <span class="class-icon">${icon}</span>
       </div>`;
     }
-    const pct = modTotal ? Math.round(modPresent/modTotal*100) : 0;
-    accordionHtml += `
-      <div class="mod-accordion" id="mod-acc-${mod}">
-        <div class="mod-header" onclick="toggleMod(${mod})">
-          <div>
-            <div class="mod-header-title">Módulo ${mod}</div>
-            <div class="mod-header-stats">${modNames[mod-1]}</div>
-          </div>
-          <div style="text-align:right">
-            <span class="badge ${modPresent>=2?'badge-green':modTotal>0?'badge-red':'badge-gray'}">${modPresent}/${modTotal} ✓</span>
-            <div style="font-size:10px;color:var(--text2);margin-top:2px;">${modTotal===0?'Sin clases':pct+'%'}</div>
-          </div>
+    modsHtml += `<div class="mod-accordion">
+      <div class="mod-header" onclick="toggleMod(${mod})" style="cursor:pointer;">
+        <div><div class="mod-header-title">Módulo ${mod}</div><div class="mod-header-stats">${modNames[mod-1]}</div></div>
+        <div style="text-align:right;display:flex;gap:6px;align-items:center;">
+          <span class="badge badge-green">${modPresent} ✅</span>
+          <span class="badge badge-red">${modAbsent} ❌</span>
+          <span style="color:var(--text2);font-size:16px;" id="mod-arrow-${mod}">›</span>
         </div>
-        <div class="mod-body" id="mod-body-${mod}">
-          <div class="classes-grid">${classesHtml}</div>
-          ${currentRole!=='maestro'?'<div class="text-sm mt-8" style="text-align:center">Tocá cada clase para cambiar el estado</div>':''} 
-        </div>
-      </div>`;
+      </div>
+      <div class="mod-body" id="mod-body-${mod}">
+        <div class="classes-grid">${classesHtml}</div>
+        ${canEdit?'<div class="text-sm mt-8" style="text-align:center;color:var(--text2)">Tocá para cambiar estado</div>':''}
+      </div>
+    </div>`;
   }
 
   document.getElementById('detail-content').innerHTML = `
@@ -1461,13 +1480,16 @@ function showStudentDetail(id) {
       <span class="badge badge-blue">Nivel ${s.level}</span>
       <span class="badge badge-gray">${s.red==0?'Sin red':'Red '+s.red}</span>
       <span class="badge badge-gray">${s.lider||'Sin líder'}</span>
-      <span class="badge ${ok?'badge-green':'badge-red'}">${ok?'🎓 Diploma':'⚠️ Sin diploma'}</span>
     </div>
-    <div class="flex-between mb-12">
-      <div class="card-title" style="margin:0">Asistencias: ${atts.present}/${TOTAL_CLASSES}</div>
-      <span class="badge ${ok?'badge-green':'badge-red'}">${ok?'✓ Diploma':'Mín. '+DIPLOMA_MIN[s.level]}</span>
+    <div class="flex-between mb-12" style="background:rgba(255,255,255,0.04);border-radius:10px;padding:10px 14px;">
+      <div>
+        <div style="font-size:11px;color:var(--text2);">Asistencias totales</div>
+        <div style="font-size:22px;font-weight:800;color:${ok?'var(--green)':'var(--red)'};">${atts.present} <span style="font-size:13px;color:var(--text2)">/ ${TOTAL_CLASSES} clases</span></div>
+      </div>
+      <span class="badge ${ok?'badge-green':'badge-red'}" style="font-size:13px;padding:6px 12px;">${ok?'🎓 Diploma':'⚠️ Sin diploma'}</span>
     </div>
-    ${accordionHtml}
+    <div style="font-size:11px;color:var(--text2);margin-bottom:8px;">Tocá cada módulo para ver el detalle de clases</div>
+    ${modsHtml}
     <div class="divider"></div>
     <div class="card-title">Cuadernillos</div>
     ${bookInfo.length===0 ? '<div class="text-sm">Sin registros</div>' :
@@ -1488,7 +1510,11 @@ function showStudentDetail(id) {
 
 function toggleMod(mod) {
   const body = document.getElementById('mod-body-' + mod);
-  if (body) body.classList.toggle('open');
+  const arrow = document.getElementById('mod-arrow-' + mod);
+  if (body) {
+    body.classList.toggle('open');
+    if (arrow) arrow.textContent = body.classList.contains('open') ? '⌄' : '›';
+  }
 }
 
 function toggleClassAtt(studentId, level, mod, cls) {
@@ -1678,16 +1704,28 @@ function saveBookPayment() {
 // ══════════════════════════════════
 let ctxStudentId = null;
 let longPressTimer = null;
+let longPressTriggered = false;
 
-function startLongPress(studentId) {
-  cancelLongPress();
-  longPressTimer = setTimeout(() => {
-    openCtxMenu(null, studentId);
-  }, 500);
+function handleStudentTap(studentId) {
+  if (longPressTriggered) { longPressTriggered = false; return; }
+  showStudentDetail(studentId);
 }
 
-function cancelLongPress() {
-  if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+// Attach long press via JS after render — more reliable than inline
+function attachLongPress() {
+  document.querySelectorAll('.list-item[id^="stu-"]').forEach(el => {
+    el.addEventListener('pointerdown', function(e) {
+      const sid = this.id.replace('stu-', '');
+      longPressTriggered = false;
+      longPressTimer = setTimeout(() => {
+        longPressTriggered = true;
+        openCtxMenu(null, sid);
+      }, 500);
+    });
+    el.addEventListener('pointerup', () => clearTimeout(longPressTimer));
+    el.addEventListener('pointerleave', () => clearTimeout(longPressTimer));
+    el.addEventListener('pointermove', () => clearTimeout(longPressTimer));
+  });
 }
 
 function openCtxMenu(ev, studentId) {
@@ -1696,7 +1734,6 @@ function openCtxMenu(ev, studentId) {
   const s = db.students.find(x => x.id === studentId);
   if (!s) return false;
   document.getElementById('ctx-student-name').textContent = s.apellido + ', ' + s.nombre;
-  // Show/hide edit for maestro
   const editBtn = document.querySelector('#modal-context-menu .enc-only');
   if (editBtn) editBtn.style.display = currentRole === 'maestro' ? 'none' : '';
   showModal('modal-context-menu');
