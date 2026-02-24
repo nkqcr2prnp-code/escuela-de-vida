@@ -320,13 +320,14 @@ textarea { resize:vertical; }
       >
     </div>
 
-    <a href="javascript:checkPin()"
+    <div onclick="checkPin()" ontouchend="checkPin()"
       style="display:block; width:100%; background:linear-gradient(135deg,var(--gold),var(--gold2));
              border-radius:12px; padding:14px; font-size:16px; font-weight:800;
              color:#0a1628; font-family:'Nunito',sans-serif; cursor:pointer; margin-bottom:8px;
-             text-align:center; text-decoration:none; box-sizing:border-box;">
+             text-align:center; box-sizing:border-box; user-select:none; -webkit-user-select:none;
+             touch-action:manipulation;">
       Ingresar →
-    </a>
+    </div>
 
     <div class="pin-error" id="pin-error"></div>
     <div style="text-align:center;margin-top:6px;">
@@ -890,9 +891,10 @@ function onPinInput(el) {
 }
 
 function checkPin() {
+  try {
   const role = document.getElementById('pin-role-sel').value;
   const input = document.getElementById('pin-input');
-  const pin = input.value;
+  const pin = input ? input.value : '';
   if (!role) {
     document.getElementById('pin-error').textContent = '⚠️ Seleccioná tu rol primero';
     return;
