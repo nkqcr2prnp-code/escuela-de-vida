@@ -891,7 +891,6 @@ function onPinInput(el) {
 }
 
 function checkPin() {
-  try {
   const role = document.getElementById('pin-role-sel').value;
   const input = document.getElementById('pin-input');
   const pin = input ? input.value : '';
@@ -1376,7 +1375,7 @@ function renderStudents() {
     byRed[red].forEach(s => {
       const atts = getStudentAttendances(s.id);
       const ok = atts.present >= DIPLOMA_MIN[s.level];
-      out += '<div class="list-item" id="stu-' + s.id + '" onclick="handleStudentTap('' + s.id + '')" oncontextmenu="return openCtxMenu(event,'' + s.id + '')">' +
+      out += '<div class="list-item" id="stu-' + s.id + '" onclick="handleStudentTap(\'' + s.id + '\')" oncontextmenu="return openCtxMenu(event,\'' + s.id + '\')">' +
         '<div class="list-item-main">' +
         '<div class="list-item-name">' + s.apellido + ', ' + s.nombre + '</div>' +
         '<div class="list-item-sub">' + (s.lider || 'Sin líder') + ' · ' + atts.present + '/' + TOTAL_CLASSES + '</div>' +
