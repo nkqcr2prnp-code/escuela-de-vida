@@ -1421,7 +1421,7 @@ function renderStudents() {
         '</div>' +
         '<div style="display:flex;align-items:center;gap:8px;">' +
         '<span class="badge ' + (ok ? 'badge-green' : 'badge-red') + '">' + atts.present + '</span>' +
-        (canDelete ? '<button onclick="event.stopPropagation();deleteStudent(\'' + s.id + '\')" style="background:rgba(231,76,60,0.15);border:1px solid rgba(231,76,60,0.4);border-radius:8px;padding:6px 10px;color:#e74c3c;font-size:16px;cursor:pointer;touch-action:manipulation;">🗑️</button>' : '') +
+        (canDelete ? '<button data-did="' + s.id + '" onclick="event.stopPropagation();deleteStudent(this.dataset.did)" style="background:rgba(231,76,60,0.15);border:1px solid rgba(231,76,60,0.4);border-radius:8px;padding:6px 10px;color:#e74c3c;font-size:16px;cursor:pointer;touch-action:manipulation;">🗑️</button>' : '') +
         '</div>' +
         '</div>';
     });
@@ -1497,8 +1497,18 @@ function addStudent() {
 }
 
 function showStudentDetail(id) {
-  const s = db.students.find(st => st.id === id);
-  if (!s) return;
+  let s = db.students.find(st => st.id === id);
+  if (!s) {
+    // Try reloading from Firebase then retry
+    fbdb.ref('escuela/students').once('value').then(snap => {
+      const data = snap.val();
+      if (data) db.students = Array.isArray(data) ? data : Object.values(data);
+      const s2 = db.students.find(st => st.id === id);
+      if (s2) showStudentDetail(id);
+      else showToast('⚠️ Alumno no encontrado');
+    });
+    return;
+  }
   document.getElementById('detail-name').textContent = `${s.apellido}, ${s.nombre}`;
   const atts = getStudentAttendances(s.id);
   const ok = atts.present >= DIPLOMA_MIN[s.level];
@@ -1523,7 +1533,8 @@ function showStudentDetail(id) {
       const session = db.attendance.find(a => a.level == s.level && a.module == mod && a.classNum == cls);
       let state = 'empty';
       if (session) {
-        state = session.presentIds.includes(s.id) ? 'present' : 'absent';
+        const pids = Array.isArray(session.presentIds) ? session.presentIds : [];
+        state = pids.includes(s.id) ? 'present' : 'absent';
         if (state==='present') modPresent++; else modAbsent++;
       }
       const icon = state==='present' ? '✅' : state==='absent' ? '❌' : '⬜';
