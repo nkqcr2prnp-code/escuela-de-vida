@@ -858,7 +858,7 @@ function refreshActiveScreen() {
   if (!activeScreen) return;
   const id = activeScreen.id;
   if (id === 'screen-home') renderHome();
-  else if (id === 'screen-students') renderStudents();
+  else if (id === 'screen-students') setTimeout(renderStudents, 200);
   else if (id === 'screen-attendance') renderAttendance();
   else if (id === 'screen-books') renderBooks();
   else if (id === 'screen-reports') renderReports();
@@ -1070,8 +1070,6 @@ function goTo(screenId) {
   if (screenId === 'screen-books') renderBooks();
   if (screenId === 'screen-reports') renderReports();
   if (screenId === 'screen-supervision') renderSupervision();
-  // Always re-render students fresh to ensure Firebase data is shown
-  if (screenId === 'screen-students') { setTimeout(renderStudents, 50); }
 }
 
 function showModal(id) { document.getElementById(id).classList.remove('hidden'); }
@@ -1323,35 +1321,35 @@ function setStuLevel(l) {
 }
 
 function renderStudents() {
-  // Always determine level from role first, then from active tab
+  // Determine level from role
   if (currentRole === 'enc1') currentStuLevel = 1;
   else if (currentRole === 'enc2') currentStuLevel = 2;
   else {
-    // Maestro: read from active tab in DOM
-    const t1 = document.getElementById('stu-tab-1');
     const t2 = document.getElementById('stu-tab-2');
     if (t2 && t2.classList.contains('active')) currentStuLevel = 2;
     else currentStuLevel = 1;
   }
-  // Sync tab UI to match
+
+  // Sync tab UI
   document.getElementById('stu-tab-1')?.classList.toggle('active', currentStuLevel==1);
   document.getElementById('stu-tab-2')?.classList.toggle('active', currentStuLevel==2);
 
   const searchEl = document.getElementById('stu-search');
   const q = searchEl ? searchEl.value.toLowerCase().trim() : '';
   const lvl = parseInt(currentStuLevel);
-  const students = db.students.filter(s => {
-    const levelMatch = parseInt(s.level) === lvl;
-    const nameMatch = !q || (s.nombre + ' ' + s.apellido + ' ' + (s.lider||'')).toLowerCase().includes(q);
-    return levelMatch && nameMatch;
-  });
+
+  // Build filtered list
+  const all = db.students || [];
+  const students = all.filter(s => parseInt(s.level) === lvl &&
+    (!q || (s.nombre+' '+s.apellido+' '+(s.lider||'')).toLowerCase().includes(q)));
+
+  const listEl = document.getElementById('students-list');
+  if (!listEl) return;
 
   if (students.length === 0) {
-    const totalInDB = (db.students||[]).length;
-    const msg = totalInDB === 0 && !firebaseReady
-      ? '<div class="empty"><div class="empty-icon">🔄</div><p>Sincronizando datos...</p></div>'
-      : `<div class="empty"><div class="empty-icon">👤</div><p>No hay alumnos en Nivel ${currentStuLevel}</p><p class="text-sm" style="color:var(--text2)">Total en BD: ${totalInDB}</p></div>`;
-    document.getElementById('students-list').innerHTML = msg;
+    listEl.innerHTML = all.length === 0
+      ? '<div class="empty"><div class="empty-icon">🔄</div><p>Cargando...</p></div>'
+      : `<div class="empty"><div class="empty-icon">👤</div><p>Sin alumnos en Nivel ${lvl}</p><p class="text-sm" style="color:var(--text2)">BD tiene ${all.length} alumnos</p></div>`;
     return;
   }
 
@@ -1388,7 +1386,7 @@ function renderStudents() {
     });
     html += '</div>';
   });
-  document.getElementById('students-list').innerHTML = html;
+  listEl.innerHTML = html;
   setTimeout(attachLongPress, 100);
 }
 
@@ -1549,7 +1547,7 @@ function debugDB() {
   const msg = 'TOTAL:'+total+' | ROL:'+currentRole+' | NIVEL:'+currentStuLevel+' | FB:'+firebaseReady+'\nLEVELS:['+lvls+']\nTYPES:['+tipos+']\nNOMBRES:'+names;
   const dbout = document.getElementById('debug-output');
   if(dbout){ dbout.textContent = msg; dbout.style.display = 'block'; }
-  alert(msg);
+  // NO alert() — it blocks DOM and causes re-render race condition
 }
 
 function toggleMod(mod) {
