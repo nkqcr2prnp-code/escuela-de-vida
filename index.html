@@ -842,21 +842,24 @@ function load() {
     }
     firebaseReady = true;
     showToast('✅ Sincronizado');
-    // Refresh current screen
-    const activeScreen = document.querySelector('.screen.active');
-    if (activeScreen) {
-      const id = activeScreen.id;
-      if (id === 'screen-home') renderHome();
-      else if (id === 'screen-students') renderStudents();
-      else if (id === 'screen-attendance') renderAttendance();
-      else if (id === 'screen-books') renderBooks();
-      else if (id === 'screen-reports') renderReports();
-    }
+    refreshActiveScreen();
   }).catch(e => {
     console.warn('Firebase read error:', e);
     firebaseReady = true;
     showToast('⚠️ Sin conexión — usando datos locales');
   });
+}
+
+function refreshActiveScreen() {
+  const activeScreen = document.querySelector('.screen.active');
+  if (!activeScreen) return;
+  const id = activeScreen.id;
+  if (id === 'screen-home') renderHome();
+  else if (id === 'screen-students') renderStudents();
+  else if (id === 'screen-attendance') renderAttendance();
+  else if (id === 'screen-books') renderBooks();
+  else if (id === 'screen-reports') renderReports();
+  else if (id === 'screen-supervision') renderSupervision();
 }
 
 // Real-time listener — updates all devices when data changes
@@ -872,16 +875,8 @@ function startRealtimeSync() {
     db.cursadas = data.cursadas || [];
     if (data.config) db.config = { ...db.config, ...data.config };
     saveLocal();
-    // Refresh UI silently
-    const activeScreen = document.querySelector('.screen.active');
-    if (activeScreen) {
-      const id = activeScreen.id;
-      if (id === 'screen-home') renderHome();
-      else if (id === 'screen-students') renderStudents();
-      else if (id === 'screen-attendance') renderAttendance();
-      else if (id === 'screen-books') renderBooks();
-      else if (id === 'screen-reports') renderReports();
-    }
+    // Refresh UI silently — respect current role levels
+    refreshActiveScreen();
   });
 }
 
@@ -956,6 +951,14 @@ function applyRoleRestrictions() {
 
   if (isEnc1) { currentAttLevel=1; currentStuLevel=1; currentBookLevel=1; currentRepLevel=1; }
   if (isEnc2) { currentAttLevel=2; currentStuLevel=2; currentBookLevel=2; currentRepLevel=2; }
+  // Force level tabs UI to match role
+  if (isEnc1 || isEnc2) {
+    const lvl = isEnc1 ? 1 : 2;
+    ['stu','att','book','rep'].forEach(prefix => {
+      document.getElementById(prefix+'-tab-1')?.classList.toggle('active', lvl===1);
+      document.getElementById(prefix+'-tab-2')?.classList.toggle('active', lvl===2);
+    });
+  }
 
   // Maestro: solo lectura — ocultar elementos de edición
   document.querySelectorAll('.enc-only').forEach(el => {
@@ -1313,9 +1316,13 @@ function setStuLevel(l) {
 }
 
 function renderStudents() {
-  const q = (document.getElementById('stu-search')?.value || '').toLowerCase();
-  const students = db.students.filter(s => s.level == currentStuLevel &&
-    (s.nombre + ' ' + s.apellido).toLowerCase().includes(q));
+  const searchEl = document.getElementById('stu-search');
+  const q = searchEl ? searchEl.value.toLowerCase().trim() : '';
+  const students = db.students.filter(s => {
+    const levelMatch = s.level == currentStuLevel;
+    const nameMatch = !q || (s.nombre + ' ' + s.apellido + ' ' + (s.lider||'')).toLowerCase().includes(q);
+    return levelMatch && nameMatch;
+  });
 
   if (students.length === 0) {
     document.getElementById('students-list').innerHTML = `<div class="empty"><div class="empty-icon">👤</div><p>No hay alumnos en Nivel ${currentStuLevel}</p></div>`;
@@ -1827,10 +1834,11 @@ function renderSupFondos() {
 }
 
 function renderSupAlumnos() {
-  const students = db.students.filter(s => s.level == supLevel)
+  const allStudents = db.students || [];
+  const students = allStudents.filter(s => s.level == supLevel)
     .sort((a,b) => a.apellido.localeCompare(b.apellido));
   if (students.length === 0) {
-    document.getElementById('sup-alumnos').innerHTML = '<div class="empty"><div class="empty-icon">👥</div><p>Sin alumnos</p></div>';
+    document.getElementById('sup-alumnos').innerHTML = `<div class="empty"><div class="empty-icon">👥</div><p>Sin alumnos en Nivel ${supLevel}</p><p class="text-sm" style="color:var(--text2)">Total en BD: ${allStudents.length}</p></div>`;
     return;
   }
   document.getElementById('sup-alumnos').innerHTML = '<div class="card" style="padding:8px 16px;">' +
