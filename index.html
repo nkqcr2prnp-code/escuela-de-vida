@@ -500,8 +500,8 @@ textarea { resize:vertical; }
   <!-- ALUMNOS -->
   <div class="section-sep" style="margin-top:16px;"><span>👥 Alumnos</span></div>
   <div class="level-tabs">
-    <button class="level-tab active" id="sup-tab-1" onclick="setSupLevel(1)">Nivel 1 <span id="sup-count-1"></span></button>
-    <button class="level-tab" id="sup-tab-2" onclick="setSupLevel(2)">Nivel 2 <span id="sup-count-2"></span></button>
+    <button class="level-tab active" id="sup-tab-1" onclick="supLevel=1;setSupLevel(1)">Nivel 1 <span id="sup-count-1"></span></button>
+    <button class="level-tab" id="sup-tab-2" onclick="supLevel=2;setSupLevel(2)">Nivel 2 <span id="sup-count-2"></span></button>
   </div>
   <div id="sup-alumnos"></div>
 
@@ -842,6 +842,7 @@ function load() {
     }
     firebaseReady = true;
     showToast('✅ Sincronizado');
+    renderHome();
     refreshActiveScreen();
   }).catch(e => {
     console.warn('Firebase read error:', e);
@@ -865,7 +866,6 @@ function refreshActiveScreen() {
 // Real-time listener — updates all devices when data changes
 function startRealtimeSync() {
   fbdb.ref('escuela').on('value', snap => {
-    if (!firebaseReady) return; // skip initial load (handled by once())
     const data = snap.val();
     if (!data) return;
     db.students = data.students || [];
@@ -1068,6 +1068,8 @@ function goTo(screenId) {
   if (screenId === 'screen-books') renderBooks();
   if (screenId === 'screen-reports') renderReports();
   if (screenId === 'screen-supervision') renderSupervision();
+  // Always re-render students fresh to ensure Firebase data is shown
+  if (screenId === 'screen-students') { setTimeout(renderStudents, 50); }
 }
 
 function showModal(id) { document.getElementById(id).classList.remove('hidden'); }
@@ -1309,6 +1311,7 @@ function generateWeeklyReportForSession(session) {
 // STUDENTS
 // ══════════════════════════════════
 function setStuLevel(l) {
+  l = parseInt(l);
   if (currentRole==='enc1' && l===2) return;
   if (currentRole==='enc2' && l===1) return;
   currentStuLevel = l;
@@ -1318,19 +1321,35 @@ function setStuLevel(l) {
 }
 
 function renderStudents() {
-  // Ensure level matches role
+  // Always determine level from role first, then from active tab
   if (currentRole === 'enc1') currentStuLevel = 1;
-  if (currentRole === 'enc2') currentStuLevel = 2;
+  else if (currentRole === 'enc2') currentStuLevel = 2;
+  else {
+    // Maestro: read from active tab in DOM
+    const t1 = document.getElementById('stu-tab-1');
+    const t2 = document.getElementById('stu-tab-2');
+    if (t2 && t2.classList.contains('active')) currentStuLevel = 2;
+    else currentStuLevel = 1;
+  }
+  // Sync tab UI to match
+  document.getElementById('stu-tab-1')?.classList.toggle('active', currentStuLevel==1);
+  document.getElementById('stu-tab-2')?.classList.toggle('active', currentStuLevel==2);
+
   const searchEl = document.getElementById('stu-search');
   const q = searchEl ? searchEl.value.toLowerCase().trim() : '';
+  const lvl = parseInt(currentStuLevel);
   const students = db.students.filter(s => {
-    const levelMatch = parseInt(s.level) === parseInt(currentStuLevel);
+    const levelMatch = parseInt(s.level) === lvl;
     const nameMatch = !q || (s.nombre + ' ' + s.apellido + ' ' + (s.lider||'')).toLowerCase().includes(q);
     return levelMatch && nameMatch;
   });
 
   if (students.length === 0) {
-    document.getElementById('students-list').innerHTML = `<div class="empty"><div class="empty-icon">👤</div><p>No hay alumnos en Nivel ${currentStuLevel}</p></div>`;
+    const totalInDB = (db.students||[]).length;
+    const msg = totalInDB === 0 && !firebaseReady
+      ? '<div class="empty"><div class="empty-icon">🔄</div><p>Sincronizando datos...</p></div>'
+      : `<div class="empty"><div class="empty-icon">👤</div><p>No hay alumnos en Nivel ${currentStuLevel}</p><p class="text-sm" style="color:var(--text2)">Total en BD: ${totalInDB}</p></div>`;
+    document.getElementById('students-list').innerHTML = msg;
     return;
   }
 
@@ -1795,9 +1814,14 @@ function saveEditStudent() {
 let supLevel = 1;
 
 function setSupLevel(l) {
-  supLevel = l;
-  document.getElementById('sup-tab-1').classList.toggle('active', l==1);
-  document.getElementById('sup-tab-2').classList.toggle('active', l==2);
+  supLevel = parseInt(l);
+  document.getElementById('sup-tab-1').classList.toggle('active', supLevel==1);
+  document.getElementById('sup-tab-2').classList.toggle('active', supLevel==2);
+  // Update counts
+  const c1 = (db.students||[]).filter(s => parseInt(s.level) === 1).length;
+  const c2 = (db.students||[]).filter(s => parseInt(s.level) === 2).length;
+  const cnt1 = document.getElementById('sup-count-1'); if(cnt1) cnt1.textContent = c1>0?'('+c1+')':'';
+  const cnt2 = document.getElementById('sup-count-2'); if(cnt2) cnt2.textContent = c2>0?'('+c2+')':'';
   renderSupAlumnos();
 }
 
@@ -1846,8 +1870,13 @@ function renderSupFondos() {
 }
 
 function renderSupAlumnos() {
+  // Read supLevel from active tab directly
+  const t2 = document.getElementById('sup-tab-2');
+  if (t2 && t2.classList.contains('active')) supLevel = 2;
+  else supLevel = 1;
   const allStudents = db.students || [];
-  const students = allStudents.filter(s => parseInt(s.level) === parseInt(supLevel))
+  const lvl = parseInt(supLevel);
+  const students = allStudents.filter(s => parseInt(s.level) === lvl)
     .sort((a,b) => a.apellido.localeCompare(b.apellido));
   if (students.length === 0) {
     document.getElementById('sup-alumnos').innerHTML = `<div class="empty"><div class="empty-icon">👥</div><p>Sin alumnos en Nivel ${supLevel}</p><p class="text-sm" style="color:var(--text2)">Total en BD: ${allStudents.length}</p></div>`;
