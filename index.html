@@ -431,17 +431,15 @@ textarea { resize:vertical; }
 <!-- ALUMNOS -->
 <div class="screen" id="screen-students">
   <div class="screen-title">Alumnos</div>
-  <div class="screen-sub">Gestión de inscriptos</div>
+  <div class="screen-sub" id="stu-screen-sub">Gestión de inscriptos</div>
   <div class="level-tabs" id="stu-level-tabs">
-    <button class="level-tab active" id="stu-tab-1" onclick="setStuLevel(1)">Nivel 1</button>
+    <button class="level-tab" id="stu-tab-1" onclick="setStuLevel(1)">Nivel 1</button>
     <button class="level-tab" id="stu-tab-2" onclick="setStuLevel(2)">Nivel 2</button>
   </div>
   <div class="search-wrap">
     <span class="search-icon">🔍</span>
     <input type="text" id="stu-search" placeholder="Buscar alumno..." oninput="renderStudents()">
   </div>
-  <button onclick="debugDB()" style="width:100%;background:rgba(255,100,0,0.15);border:1px solid orange;border-radius:8px;padding:8px;color:orange;font-size:12px;margin-bottom:8px;touch-action:manipulation;">🛠️ DEBUG — tocá para ver datos</button>
-  <div id="debug-output" style="font-size:11px;color:var(--text2);word-break:break-all;margin-bottom:8px;background:rgba(0,0,0,0.3);padding:8px;border-radius:6px;display:none;"></div>
   <button class="btn btn-gold btn-full mb-12 enc-only" id="btn-add-student" onclick="openAddStudent()">+ Agregar Alumno</button>
   <div id="students-list"></div>
 </div>
@@ -1321,39 +1319,45 @@ function setStuLevel(l) {
 }
 
 function renderStudents() {
-  // Determine level from role
-  if (currentRole === 'enc1') currentStuLevel = 1;
-  else if (currentRole === 'enc2') currentStuLevel = 2;
-  else {
-    const t2 = document.getElementById('stu-tab-2');
-    if (t2 && t2.classList.contains('active')) currentStuLevel = 2;
-    else currentStuLevel = 1;
+  // Step 1: set level from role (enc always fixed, maestro uses tab)
+  if (currentRole === 'enc1') {
+    currentStuLevel = 1;
+    document.getElementById('stu-tab-1').style.display = '';
+    document.getElementById('stu-tab-2').style.display = 'none';
+  } else if (currentRole === 'enc2') {
+    currentStuLevel = 2;
+    document.getElementById('stu-tab-1').style.display = 'none';
+    document.getElementById('stu-tab-2').style.display = '';
+  } else {
+    // maestro — show both, keep currentStuLevel as is
+    document.getElementById('stu-tab-1').style.display = '';
+    document.getElementById('stu-tab-2').style.display = '';
   }
 
-  // Sync tab UI
-  document.getElementById('stu-tab-1')?.classList.toggle('active', currentStuLevel==1);
-  document.getElementById('stu-tab-2')?.classList.toggle('active', currentStuLevel==2);
+  // Step 2: sync active tab UI
+  document.getElementById('stu-tab-1').classList.toggle('active', currentStuLevel == 1);
+  document.getElementById('stu-tab-2').classList.toggle('active', currentStuLevel == 2);
 
+  // Step 3: filter
   const searchEl = document.getElementById('stu-search');
   const q = searchEl ? searchEl.value.toLowerCase().trim() : '';
   const lvl = parseInt(currentStuLevel);
-
-  // Build filtered list
   const all = db.students || [];
-  const students = all.filter(s => parseInt(s.level) === lvl &&
-    (!q || (s.nombre+' '+s.apellido+' '+(s.lider||'')).toLowerCase().includes(q)));
+  const students = all.filter(s => {
+    return parseInt(s.level) === lvl &&
+      (!q || (s.nombre + ' ' + s.apellido + ' ' + (s.lider || '')).toLowerCase().includes(q));
+  });
 
+  // Step 4: render
   const listEl = document.getElementById('students-list');
   if (!listEl) return;
 
   if (students.length === 0) {
-    listEl.innerHTML = all.length === 0
-      ? '<div class="empty"><div class="empty-icon">🔄</div><p>Cargando...</p></div>'
-      : `<div class="empty"><div class="empty-icon">👤</div><p>Sin alumnos en Nivel ${lvl}</p><p class="text-sm" style="color:var(--text2)">BD tiene ${all.length} alumnos</p></div>`;
+    listEl.innerHTML = '<div class="empty"><div class="empty-icon">👤</div><p>Sin alumnos en Nivel ' + lvl + '</p></div>';
     return;
   }
 
-  const sorted = [...students].sort((a,b) => a.apellido.localeCompare(b.apellido));
+  const sorted = [...students].sort((a, b) => a.apellido.localeCompare(b.apellido));
 
   // Group by red
   const byRed = {};
@@ -1363,32 +1367,28 @@ function renderStudents() {
     byRed[key].push(s);
   });
 
-  let html = '';
-  Object.keys(byRed).sort((a,b) => parseInt(a)-parseInt(b)).forEach(red => {
-    const label = red === '0' ? 'Sin red / Primera vez' : `Red ${red}`;
-    html += `<div class="section-sep"><span>${label}</span></div><div class="card" style="padding:8px 16px;">`;
+  let out = '';
+  Object.keys(byRed).sort((a, b) => parseInt(a) - parseInt(b)).forEach(red => {
+    const label = red === '0' ? 'Sin red / Primera vez' : 'Red ' + red;
+    out += '<div class="section-sep"><span>' + label + '</span></div><div class="card" style="padding:8px 16px;">';
     byRed[red].forEach(s => {
       const atts = getStudentAttendances(s.id);
-      const pct = Math.round(atts.present / TOTAL_CLASSES * 100);
       const ok = atts.present >= DIPLOMA_MIN[s.level];
-      html += `
-        <div class="list-item" id="stu-${s.id}" onclick="handleStudentTap('${s.id}')" oncontextmenu="return openCtxMenu(event,'${s.id}')">
-          <div class="list-item-main">
-            <div class="list-item-name">${s.apellido}, ${s.nombre}</div>
-            <div class="list-item-sub">${s.lider || 'Sin líder asignado'} · ${atts.present}/${TOTAL_CLASSES} asist.</div>
-            <div class="progress-wrap mt-8" style="width:140px"><div class="progress-bar ${ok?'ok':'bad'}" style="width:${pct}%"></div></div>
-          </div>
-          <div class="list-item-right">
-            <span class="badge ${ok?'badge-green':'badge-red'}">${ok?'🎓':'⚠️'}</span>
-            <span class="badge badge-gray">${atts.present} pres.</span>
-          </div>
-        </div>`;
+      out += '<div class="list-item" id="stu-' + s.id + '" onclick="handleStudentTap('' + s.id + '')" oncontextmenu="return openCtxMenu(event,'' + s.id + '')">' +
+        '<div class="list-item-main">' +
+        '<div class="list-item-name">' + s.apellido + ', ' + s.nombre + '</div>' +
+        '<div class="list-item-sub">' + (s.lider || 'Sin líder') + ' · ' + atts.present + '/' + TOTAL_CLASSES + '</div>' +
+        '</div>' +
+        '<span class="badge ' + (ok ? 'badge-green' : 'badge-red') + '">' + atts.present + '</span>' +
+        '</div>';
     });
-    html += '</div>';
+    out += '</div>';
   });
-  listEl.innerHTML = html;
+
+  listEl.innerHTML = out;
   setTimeout(attachLongPress, 100);
 }
+
 
 function openAddStudent() {
   // Auto-set nivel based on role
