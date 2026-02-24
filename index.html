@@ -844,11 +844,12 @@ function load() {
   fbdb.ref('escuela').once('value').then(snap => {
     const data = snap.val();
     if (data) {
-      db.students = data.students || [];
-      db.attendance = data.attendance || [];
-      db.books = data.books || [];
-      db.pendientes = data.pendientes || [];
-      db.cursadas = data.cursadas || [];
+      db.students = Array.isArray(data.students) ? data.students : (data.students ? Object.values(data.students) : []);
+      const rawAtt = Array.isArray(data.attendance) ? data.attendance : (data.attendance ? Object.values(data.attendance) : []);
+      db.attendance = rawAtt.map(a => ({ ...a, presentIds: Array.isArray(a.presentIds) ? a.presentIds : [] }));
+      db.books = Array.isArray(data.books) ? data.books : (data.books ? Object.values(data.books) : []);
+      db.pendientes = Array.isArray(data.pendientes) ? data.pendientes : (data.pendientes ? Object.values(data.pendientes) : []);
+      db.cursadas = Array.isArray(data.cursadas) ? data.cursadas : (data.cursadas ? Object.values(data.cursadas) : []);
       if (data.config) db.config = { ...db.config, ...data.config };
       saveLocal();
     }
@@ -1082,7 +1083,7 @@ function goTo(screenId) {
 
   if (screenId === 'screen-home') renderHome();
   if (screenId === 'screen-attendance') renderAttendance();
-  if (screenId === 'screen-students') renderStudents();
+  if (screenId === 'screen-students') loadAndRenderStudents();
   if (screenId === 'screen-books') renderBooks();
   if (screenId === 'screen-reports') renderReports();
   if (screenId === 'screen-supervision') renderSupervision();
@@ -1334,6 +1335,26 @@ function setStuLevel(l) {
   document.getElementById('stu-tab-1').classList.toggle('active', l==1);
   document.getElementById('stu-tab-2').classList.toggle('active', l==2);
   renderStudents();
+}
+
+function loadAndRenderStudents() {
+  // Show loading immediately
+  const listEl = document.getElementById('students-list');
+  if (listEl) listEl.innerHTML = '<div class="empty"><div class="empty-icon">🔄</div><p>Cargando alumnos...</p></div>';
+  // Fetch full db fresh from Firebase
+  fbdb.ref('escuela').once('value').then(snap => {
+    const data = snap.val();
+    if (data) {
+      if (Array.isArray(data.students)) db.students = data.students;
+      else if (data.students) db.students = Object.values(data.students);
+      const rawAtt2 = Array.isArray(data.attendance) ? data.attendance : (data.attendance ? Object.values(data.attendance) : []);
+      db.attendance = rawAtt2.map(a => ({ ...a, presentIds: Array.isArray(a.presentIds) ? a.presentIds : [] }));
+    }
+    renderStudents();
+  }).catch(e => {
+    console.warn('Firebase fetch error:', e);
+    renderStudents();
+  });
 }
 
 function renderStudents() {
@@ -1643,8 +1664,10 @@ function getStudentAttendances(studentId) {
   const st = db.students.find(s => s.id === studentId);
   if (!st) return { present:0, absent:0, total:0 };
   let present=0, total=0;
-  db.attendance.filter(a => a.level == st.level).forEach(a => {
-    total++; if (a.presentIds.includes(studentId)) present++;
+  (db.attendance || []).filter(a => a && a.level == st.level).forEach(a => {
+    total++;
+    const ids = Array.isArray(a.presentIds) ? a.presentIds : [];
+    if (ids.includes(studentId)) present++;
   });
   return { present, absent:total-present, total };
 }
