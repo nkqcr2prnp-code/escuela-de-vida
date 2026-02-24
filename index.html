@@ -511,6 +511,7 @@ textarea { resize:vertical; }
 
   <!-- HISTORIAL CURSADAS -->
   <div class="section-sep" style="margin-top:16px;"><span>🗂️ Historial de cursadas</span></div>
+  <p style="font-size:11px;color:var(--text2);margin-bottom:8px;">El historial queda guardado en la nube (Firebase) y no se borra al cerrar la cursada.</p>
   <div id="sup-historial"></div>
 
   <!-- CIERRE DE CURSADA -->
@@ -620,6 +621,37 @@ textarea { resize:vertical; }
 </div>
 
 <!-- DETALLE ALUMNO -->
+<!-- CONTEXT MENU -->
+<div class="modal-overlay hidden" id="modal-context-menu" onclick="hideModal('modal-context-menu')" style="align-items:flex-end;padding:0;">
+  <div style="background:var(--navy2);border-radius:20px 20px 0 0;width:100%;padding:16px;border-top:1px solid var(--border);">
+    <div id="ctx-student-name" style="font-family:'Cinzel',serif;font-size:14px;color:var(--gold);text-align:center;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border);"></div>
+    <button class="btn btn-outline btn-full" style="margin-bottom:10px;" onclick="ctxView()">👁️ Ver detalle</button>
+    <button class="btn btn-outline btn-full enc-only" style="margin-bottom:10px;" onclick="ctxEdit()">✏️ Editar alumno</button>
+    <button class="btn btn-red btn-full" onclick="ctxDelete()">🗑️ Eliminar alumno</button>
+    <button class="btn btn-outline btn-full" style="margin-top:10px;" onclick="hideModal('modal-context-menu')">Cancelar</button>
+  </div>
+</div>
+
+<!-- EDIT STUDENT MODAL -->
+<div class="modal-overlay hidden" id="modal-edit-student">
+  <div class="modal-card">
+    <div class="modal-title">✏️ Editar Alumno</div>
+    <button class="modal-close" onclick="hideModal('modal-edit-student')">✕</button>
+    <div class="form-group"><label>Nombre</label><input type="text" id="edit-nombre" placeholder="Nombre"></div>
+    <div class="form-group"><label>Apellido</label><input type="text" id="edit-apellido" placeholder="Apellido"></div>
+    <div class="form-group"><label>Red</label>
+      <select id="edit-red">
+        <option value="0">Sin red asignada</option>
+        <option value="1">Red 1</option><option value="2">Red 2</option><option value="3">Red 3</option>
+        <option value="4">Red 4</option><option value="5">Red 5</option><option value="6">Red 6</option>
+        <option value="7">Red 7</option><option value="8">Red 8</option><option value="9">Red 9</option><option value="10">Red 10</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Líder de Casa de Paz</label><input type="text" id="edit-lider" placeholder="Nombre del líder"></div>
+    <button class="btn btn-gold btn-full mt-12" onclick="saveEditStudent()">💾 Guardar cambios</button>
+  </div>
+</div>
+
 <div class="modal-overlay hidden" id="modal-student-detail">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -1306,7 +1338,7 @@ function renderStudents() {
       const pct = Math.round(atts.present / TOTAL_CLASSES * 100);
       const ok = atts.present >= DIPLOMA_MIN[s.level];
       html += `
-        <div class="list-item" onclick="showStudentDetail('${s.id}')">
+        <div class="list-item" onclick="showStudentDetail('${s.id}')" oncontextmenu="return openCtxMenu(event,'${s.id}')" ontouchstart="startLongPress('${s.id}')" ontouchend="cancelLongPress()" ontouchmove="cancelLongPress()">
           <div class="list-item-main">
             <div class="list-item-name">${s.apellido}, ${s.nombre}</div>
             <div class="list-item-sub">${s.lider || 'Sin líder asignado'} · ${atts.present}/${TOTAL_CLASSES} asist.</div>
@@ -1335,42 +1367,34 @@ function addStudent() {
   db.students.push({ id: studentId, nombre, apellido, level: nivel, red, lider });
 
   // Register retroactive attendance from selects
-  const today = new Date().toISOString().split('T')[0];
-  for (let mod = 1; mod <= 3; mod++) {
-    const present = parseInt(document.getElementById(`prev-m${mod}-present`)?.value || 0);
-    const absent  = parseInt(document.getElementById(`prev-m${mod}-absent`)?.value  || 0);
-    const total = present + absent;
-    if (total === 0) continue;
-
-    // Create one session per class in this module, marking present/absent in order
-    for (let cls = 1; cls <= total; cls++) {
-      const isPresent = cls <= present; // first N = present, rest = absent
-      let session = db.attendance.find(a => a.level == nivel && a.module == mod && a.classNum == cls);
-      if (!session) {
-        session = {
-          id: `retro-${nivel}-${mod}-${cls}-${Date.now()}`,
-          date: today,
-          level: nivel, module: mod, classNum: cls,
-          presentIds: [], notes: 'Registro retroactivo'
-        };
-        db.attendance.push(session);
-      }
-      if (isPresent && !session.presentIds.includes(studentId)) {
-        session.presentIds.push(studentId);
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    for (let mod = 1; mod <= 3; mod++) {
+      const pEl = document.getElementById('prev-m'+mod+'-present');
+      const aEl = document.getElementById('prev-m'+mod+'-absent');
+      const present = parseInt((pEl && pEl.value) || 0);
+      const absent  = parseInt((aEl && aEl.value)  || 0);
+      const total = present + absent;
+      if (total === 0) continue;
+      for (let cls = 1; cls <= total; cls++) {
+        const isPresent = cls <= present;
+        let session = db.attendance.find(a => a.level == nivel && a.module == mod && a.classNum == cls);
+        if (!session) {
+          session = { id: 'retro-'+nivel+'-'+mod+'-'+cls+'-'+Date.now(), date: today, level: nivel, module: mod, classNum: cls, presentIds: [], notes: 'Registro retroactivo' };
+          db.attendance.push(session);
+        }
+        if (isPresent && !session.presentIds.includes(studentId)) session.presentIds.push(studentId);
       }
     }
-  }
+  } catch(e) { console.warn('Retroactive att error:', e); }
 
   save();
   hideModal('modal-add-student');
   showToast('✅ Alumno agregado');
-  ['new-nombre','new-apellido','new-lider'].forEach(id => document.getElementById(id).value = '');
-  // Reset selects
+  ['new-nombre','new-apellido','new-lider'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
   for (let m=1;m<=3;m++) {
-    const p = document.getElementById(`prev-m${m}-present`);
-    const a = document.getElementById(`prev-m${m}-absent`);
-    if(p) p.value = '0';
-    if(a) a.value = '0';
+    const p=document.getElementById('prev-m'+m+'-present'); if(p) p.value='0';
+    const a=document.getElementById('prev-m'+m+'-absent');  if(a) a.value='0';
   }
   renderStudents();
 }
@@ -1645,6 +1669,74 @@ function saveBookPayment() {
 }
 
 
+
+// ══════════════════════════════════
+// CONTEXT MENU (long press)
+// ══════════════════════════════════
+let ctxStudentId = null;
+let longPressTimer = null;
+
+function startLongPress(studentId) {
+  cancelLongPress();
+  longPressTimer = setTimeout(() => {
+    openCtxMenu(null, studentId);
+  }, 500);
+}
+
+function cancelLongPress() {
+  if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+}
+
+function openCtxMenu(ev, studentId) {
+  if (ev) ev.preventDefault();
+  ctxStudentId = studentId;
+  const s = db.students.find(x => x.id === studentId);
+  if (!s) return false;
+  document.getElementById('ctx-student-name').textContent = s.apellido + ', ' + s.nombre;
+  // Show/hide edit for maestro
+  const editBtn = document.querySelector('#modal-context-menu .enc-only');
+  if (editBtn) editBtn.style.display = currentRole === 'maestro' ? 'none' : '';
+  showModal('modal-context-menu');
+  return false;
+}
+
+function ctxView() {
+  hideModal('modal-context-menu');
+  setTimeout(() => showStudentDetail(ctxStudentId), 200);
+}
+
+function ctxEdit() {
+  hideModal('modal-context-menu');
+  const s = db.students.find(x => x.id === ctxStudentId);
+  if (!s) return;
+  document.getElementById('edit-nombre').value = s.nombre;
+  document.getElementById('edit-apellido').value = s.apellido;
+  document.getElementById('edit-red').value = s.red;
+  document.getElementById('edit-lider').value = s.lider || '';
+  setTimeout(() => showModal('modal-edit-student'), 200);
+}
+
+function ctxDelete() {
+  hideModal('modal-context-menu');
+  setTimeout(() => deleteStudent(ctxStudentId), 200);
+}
+
+function saveEditStudent() {
+  const s = db.students.find(x => x.id === ctxStudentId);
+  if (!s) return;
+  const nombre = document.getElementById('edit-nombre').value.trim();
+  const apellido = document.getElementById('edit-apellido').value.trim();
+  if (!nombre || !apellido) { showToast('⚠️ Nombre y apellido requeridos'); return; }
+  s.nombre = nombre;
+  s.apellido = apellido;
+  s.red = parseInt(document.getElementById('edit-red').value);
+  s.lider = document.getElementById('edit-lider').value.trim();
+  save();
+  hideModal('modal-edit-student');
+  showToast('✅ Alumno actualizado');
+  renderStudents();
+}
+
 // ══════════════════════════════════
 // SUPERVISION (MAESTRO)
 // ══════════════════════════════════
@@ -1658,6 +1750,9 @@ function setSupLevel(l) {
 }
 
 function renderSupervision() {
+  // Init level tabs
+  document.getElementById('sup-tab-1')?.classList.toggle('active', supLevel==1);
+  document.getElementById('sup-tab-2')?.classList.toggle('active', supLevel==2);
   renderSupFondos();
   renderSupAlumnos();
   renderSupPendientes();
