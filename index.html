@@ -1539,27 +1539,31 @@ function showStudentDetail(id) {
       }
       const icon = state==='present' ? '✅' : state==='absent' ? '❌' : '⬜';
       const canEdit = currentRole !== 'maestro';
-      classesHtml += `<div class="class-btn ${state}" ${canEdit?`onclick="toggleClassAtt('${s.id}',${s.level},${mod},${cls})"`:''}  style="${canEdit?'cursor:pointer':'cursor:default'}">
-        <span class="class-num">C${cls}</span>
-        <span class="class-icon">${icon}</span>
-      </div>`;
+      const attClick = canEdit ? 'onclick="toggleClassAtt(\'' + s.id + '\',' + s.level + ',' + mod + ',' + cls + ')"' : '';
+      classesHtml += '<div class="class-btn ' + state + '" ' + attClick + ' style="' + (canEdit?'cursor:pointer':'cursor:default') + '">' +
+        '<span class="class-num">C' + cls + '</span>' +
+        '<span class="class-icon">' + icon + '</span>' +
+        '</div>';
     }
-    modsHtml += `<div class="mod-accordion">
-      <div class="mod-header" onclick="toggleMod(${mod})" style="cursor:pointer;">
-        <div><div class="mod-header-title">Módulo ${mod}</div><div class="mod-header-stats">${modNames[mod-1]}</div></div>
-        <div style="text-align:right;display:flex;gap:6px;align-items:center;">
-          <span class="badge badge-green">${modPresent} ✅</span>
-          <span class="badge badge-red">${modAbsent} ❌</span>
-          <span style="color:var(--text2);font-size:16px;" id="mod-arrow-${mod}">›</span>
-        </div>
-      </div>
-      <div class="mod-body" id="mod-body-${mod}">
-        <div class="classes-grid">${classesHtml}</div>
-        ${canEdit?'<div class="text-sm mt-8" style="text-align:center;color:var(--text2)">Tocá para cambiar estado</div>':''}
-      </div>
-    </div>`;
+    const editHint = currentRole !== 'maestro' ? '<div class="text-sm mt-8" style="text-align:center;color:var(--text2)">Tocá para cambiar estado</div>' : '';
+    modsHtml += '<div class="mod-accordion">' +
+      '<div class="mod-header" onclick="toggleMod(' + mod + ')" style="cursor:pointer;">' +
+        '<div><div class="mod-header-title">Módulo ' + mod + '</div><div class="mod-header-stats">' + modNames[mod-1] + '</div></div>' +
+        '<div style="text-align:right;display:flex;gap:6px;align-items:center;">' +
+          '<span class="badge badge-green">' + modPresent + ' ✅</span>' +
+          '<span class="badge badge-red">' + modAbsent + ' ❌</span>' +
+          '<span style="color:var(--text2);font-size:16px;" id="mod-arrow-' + mod + '">›</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="mod-body" id="mod-body-' + mod + '">' +
+        '<div class="classes-grid">' + classesHtml + '</div>' +
+        editHint +
+      '</div>' +
+    '</div>';
+  
   }
 
+  
   document.getElementById('detail-content').innerHTML = `
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
       <span class="badge badge-blue">Nivel ${s.level}</span>
