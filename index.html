@@ -622,6 +622,17 @@ textarea { resize:vertical; }
 </div>
 
 <!-- DETALLE ALUMNO -->
+<!-- DELETE CONFIRM MODAL -->
+<div class="modal-overlay hidden" id="modal-delete-confirm" style="align-items:flex-end;padding:0;">
+  <div style="background:var(--navy2);border-radius:20px 20px 0 0;width:100%;padding:20px;border-top:1px solid var(--border);">
+    <div style="font-size:15px;font-weight:700;text-align:center;margin-bottom:8px;">🗑️ Eliminar alumno</div>
+    <div id="delete-confirm-name" style="color:var(--gold);text-align:center;margin-bottom:16px;font-size:14px;"></div>
+    <p style="text-align:center;color:var(--text2);font-size:13px;margin-bottom:20px;">Esta acción no se puede deshacer</p>
+    <button id="delete-confirm-btn" class="btn btn-red btn-full" style="margin-bottom:10px;">Sí, eliminar</button>
+    <button class="btn btn-outline btn-full" onclick="hideModal('modal-delete-confirm')">Cancelar</button>
+  </div>
+</div>
+
 <!-- CONTEXT MENU -->
 <div class="modal-overlay hidden" id="modal-context-menu" onclick="hideModal('modal-context-menu')" style="align-items:flex-end;padding:0;">
   <div style="background:var(--navy2);border-radius:20px 20px 0 0;width:100%;padding:16px;border-top:1px solid var(--border);">
@@ -1375,7 +1386,7 @@ function renderStudents() {
     byRed[red].forEach(s => {
       const atts = getStudentAttendances(s.id);
       const ok = atts.present >= DIPLOMA_MIN[s.level];
-      out += '<div class="list-item" id="stu-' + s.id + '" onclick="handleStudentTap(\'' + s.id + '\')" oncontextmenu="return openCtxMenu(event,\'' + s.id + '\')">' +
+      out += '<div class="list-item" id="stu-' + s.id + '">' +
         '<div class="list-item-main">' +
         '<div class="list-item-name">' + s.apellido + ', ' + s.nombre + '</div>' +
         '<div class="list-item-sub">' + (s.lider || 'Sin líder') + ' · ' + atts.present + '/' + TOTAL_CLASSES + '</div>' +
@@ -1596,11 +1607,27 @@ function toggleClassAtt(studentId, level, mod, cls) {
 }
 
 function deleteStudent(id) {
-  if (!confirm('¿Eliminar este alumno?')) return;
-  db.students = db.students.filter(s => s.id !== id);
-  db.books = db.books.filter(b => b.studentId !== id);
-  db.attendance.forEach(a => a.presentIds = a.presentIds.filter(p => p !== id));
-  save(); hideModal('modal-student-detail'); showToast('✅ Alumno eliminado'); renderStudents();
+  const s = db.students.find(x => x.id === id);
+  if (!s) return;
+  // Use custom confirm to avoid iOS confirm() issues
+  showDeleteConfirm(id, s.apellido + ', ' + s.nombre);
+}
+
+function showDeleteConfirm(id, nombre) {
+  const modal = document.getElementById('modal-delete-confirm');
+  document.getElementById('delete-confirm-name').textContent = nombre;
+  document.getElementById('delete-confirm-btn').onclick = function() {
+    db.students = db.students.filter(s => s.id !== id);
+    db.books = db.books.filter(b => b.studentId !== id);
+    db.attendance.forEach(a => { a.presentIds = a.presentIds.filter(p => p !== id); });
+    save();
+    hideModal('modal-delete-confirm');
+    hideModal('modal-context-menu');
+    hideModal('modal-student-detail');
+    showToast('✅ Alumno eliminado');
+    renderStudents();
+  };
+  showModal('modal-delete-confirm');
 }
 
 // ══════════════════════════════════
@@ -1747,45 +1774,58 @@ function saveBookPayment() {
 // ══════════════════════════════════
 let ctxStudentId = null;
 let longPressTimer = null;
-let longPressTriggered = false;
+let longPressFired = false;
 
-function handleStudentTap(studentId) {
-  if (longPressTriggered) { longPressTriggered = false; return; }
-  showStudentDetail(studentId);
-}
-
-// Attach long press via JS after render — more reliable than inline
 function attachLongPress() {
   document.querySelectorAll('.list-item[id^="stu-"]').forEach(el => {
-    el.addEventListener('pointerdown', function(e) {
-      const sid = this.id.replace('stu-', '');
-      longPressTriggered = false;
+    // Remove old listeners by cloning
+    const clone = el.cloneNode(true);
+    el.parentNode.replaceChild(clone, el);
+    const sid = clone.id.replace('stu-', '');
+
+    clone.addEventListener('touchstart', function(e) {
+      longPressFired = false;
       longPressTimer = setTimeout(() => {
-        longPressTriggered = true;
-        openCtxMenu(null, sid);
-      }, 500);
+        longPressFired = true;
+        openCtxMenu(sid);
+      }, 600);
+    }, { passive: true });
+
+    clone.addEventListener('touchend', function(e) {
+      if (longPressFired) {
+        e.preventDefault();
+        return;
+      }
+      clearTimeout(longPressTimer);
+      // Normal tap = view detail
+      showStudentDetail(sid);
     });
-    el.addEventListener('pointerup', () => clearTimeout(longPressTimer));
-    el.addEventListener('pointerleave', () => clearTimeout(longPressTimer));
-    el.addEventListener('pointermove', () => clearTimeout(longPressTimer));
+
+    clone.addEventListener('touchmove', function() {
+      clearTimeout(longPressTimer);
+    }, { passive: true });
   });
 }
 
-function openCtxMenu(ev, studentId) {
-  if (ev) ev.preventDefault();
+function handleStudentTap(studentId) {
+  // Fallback for non-touch
+  if (!longPressFired) showStudentDetail(studentId);
+  longPressFired = false;
+}
+
+function openCtxMenu(studentId) {
   ctxStudentId = studentId;
   const s = db.students.find(x => x.id === studentId);
-  if (!s) return false;
+  if (!s) return;
   document.getElementById('ctx-student-name').textContent = s.apellido + ', ' + s.nombre;
   const editBtn = document.querySelector('#modal-context-menu .enc-only');
   if (editBtn) editBtn.style.display = currentRole === 'maestro' ? 'none' : '';
   showModal('modal-context-menu');
-  return false;
 }
 
 function ctxView() {
   hideModal('modal-context-menu');
-  setTimeout(() => showStudentDetail(ctxStudentId), 200);
+  setTimeout(() => showStudentDetail(ctxStudentId), 300);
 }
 
 function ctxEdit() {
@@ -1800,8 +1840,9 @@ function ctxEdit() {
 }
 
 function ctxDelete() {
-  hideModal('modal-context-menu');
-  setTimeout(() => deleteStudent(ctxStudentId), 200);
+  const s = db.students.find(x => x.id === ctxStudentId);
+  if (!s) return;
+  showDeleteConfirm(ctxStudentId, s.apellido + ', ' + s.nombre);
 }
 
 function saveEditStudent() {
