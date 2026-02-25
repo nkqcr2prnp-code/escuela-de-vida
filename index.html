@@ -1304,7 +1304,20 @@ function showAttDetail(attId) {
     ${a.notes ? `<div class="divider"></div><div class="text-sm">📝 ${a.notes}</div>` : ''}
   `;
   showModal('modal-student-detail');
-}
+  // Attach click handlers to class buttons via delegation
+  setTimeout(() => {
+    document.querySelectorAll('.class-btn[data-sid]').forEach(btn => {
+      btn.onclick = function() {
+        toggleClassAtt(
+          this.dataset.sid,
+          parseInt(this.dataset.level),
+          parseInt(this.dataset.mod),
+          parseInt(this.dataset.cls)
+        );
+      };
+    });
+  }, 50);
+} // end showStudentDetail
 
 function toggleAtt(id) {
   const btn = document.getElementById('toggle-' + id);
@@ -1581,12 +1594,14 @@ function showStudentDetail(id) {
       }
       const icon = state==='present' ? '✅' : state==='absent' ? '❌' : '⬜';
       const canEdit = currentRole !== 'maestro';
-      const attClick = canEdit ? 'onclick="toggleClassAtt(\'' + s.id + '\',' + s.level + ',' + mod + ',' + cls + ')"' : '';
-      classesHtml += '<div class="class-btn ' + state + '" id="cbtn-' + s.id + '-' + mod + '-' + cls + '" ' + attClick + ' style="' + (canEdit?'cursor:pointer':'cursor:default') + '">' +
-        '<span class="class-num" style="font-size:9px;">' + getClassDate((mod-1)*4+cls) + '</span>' +
+      const attCursor = canEdit ? 'cursor:pointer;touch-action:manipulation;' : 'cursor:default;';
+      const globalClsNum2 = (mod-1)*4 + cls;
+      classesHtml += '<div class="class-btn ' + state + '" id="cbtn-' + s.id + '-' + mod + '-' + cls + '"' +
+        (canEdit ? ' data-sid="' + s.id + '" data-level="' + s.level + '" data-mod="' + mod + '" data-cls="' + cls + '"' : '') +
+        ' style="' + attCursor + '">' +
+        '<span class="class-num" style="font-size:9px;">' + clsDate + '</span>' +
         '<span class="class-icon">' + icon + '</span>' +
         '</div>';
-    }
     const editHint = currentRole !== 'maestro' ? '<div class="text-sm mt-8" style="text-align:center;color:var(--text2)">Tocá para cambiar estado</div>' : '';
     modsHtml += '<div class="mod-accordion">' +
       '<div class="mod-header" onclick="toggleMod(' + mod + ')" style="cursor:pointer;">' +
@@ -1615,7 +1630,7 @@ function showStudentDetail(id) {
     <div class="flex-between mb-12" style="background:rgba(255,255,255,0.04);border-radius:10px;padding:10px 14px;">
       <div>
         <div style="font-size:11px;color:var(--text2);">Asistencias totales</div>
-        <div style="font-size:22px;font-weight:800;color:${ok?'var(--green)':'var(--red)'};" class="att-total">${atts.present} <span style="font-size:13px;color:var(--text2)">/ ${TOTAL_CLASSES} clases</span></div>
+        <div style="font-size:22px;font-weight:800;color:${ok?'var(--green)':'var(--red)'};" class="att-total"><span class="att-total-num">${atts.present}</span> <span style="font-size:13px;color:var(--text2)">/ ${TOTAL_CLASSES} clases</span></div>
       </div>
       <span class="badge ${ok?'badge-green':'badge-red'}" style="font-size:13px;padding:6px 12px;">${ok?'🎓 Diploma':'⚠️ Sin diploma'}</span>
     </div>
@@ -2758,6 +2773,8 @@ window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
   showToast('💡 Instalá la app desde el menú del navegador');
 });
+
+} // balance
 </script>
 </body>
 </html>
