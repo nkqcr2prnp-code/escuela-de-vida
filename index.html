@@ -1304,7 +1304,15 @@ function showAttDetail(attId) {
     ${a.notes ? `<div class="divider"></div><div class="text-sm">📝 ${a.notes}</div>` : ''}
   `;
   showModal('modal-student-detail');
-}
+  // Attach click handlers to class buttons
+  setTimeout(function() {
+    document.querySelectorAll('.class-btn[data-sid]').forEach(function(btn) {
+      btn.onclick = function() {
+        toggleClassAtt(this.dataset.sid, parseInt(this.dataset.level), parseInt(this.dataset.mod), parseInt(this.dataset.cls));
+      };
+    });
+  }, 100);
+} // end showStudentDetail
 
 function toggleAtt(id) {
   const btn = document.getElementById('toggle-' + id);
@@ -1589,6 +1597,7 @@ function showStudentDetail(id) {
         '<span class="class-num" style="font-size:9px;">' + clsDate + '</span>' +
         '<span class="class-icon">' + icon + '</span>' +
         '</div>';
+    } // end cls loop
     const editHint = currentRole !== 'maestro' ? '<div class="text-sm mt-8" style="text-align:center;color:var(--text2)">Tocá para cambiar estado</div>' : '';
     modsHtml += '<div class="mod-accordion">' +
       '<div class="mod-header" onclick="toggleMod(' + mod + ')" style="cursor:pointer;">' +
@@ -2762,7 +2771,6 @@ window.addEventListener('beforeinstallprompt', e => {
   showToast('💡 Instalá la app desde el menú del navegador');
 });
 
-} // balance
 </script>
 </body>
 </html>
