@@ -367,7 +367,7 @@ textarea { resize:vertical; }
   <div class="card">
     <div class="card-title">📋 Acciones Rápidas</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;" id="quick-actions">
-      <button class="btn btn-gold enc-only" onclick="goTo('screen-attendance')">✅ Asistencia</button>
+      
       <button class="btn btn-outline" onclick="goTo('screen-students')">👤 Alumnos</button>
       <button class="btn btn-outline" onclick="goTo('screen-books')">📚 Cuadernillos</button>
       <button class="btn btn-outline" onclick="goTo('screen-reports')">📊 Informes</button>
@@ -542,7 +542,7 @@ textarea { resize:vertical; }
 <!-- ════ BOTTOM NAV ════ -->
 <nav class="bottom-nav">
   <button class="nav-item active" id="nav-home" onclick="goTo('screen-home')"><span class="nav-icon">🏠</span><span>Inicio</span></button>
-  <button class="nav-item enc-only" id="nav-attendance" onclick="goTo('screen-attendance')"><span class="nav-icon">✅</span><span>Asistencia</span></button>
+  <button class="nav-item enc-only" id="nav-attendance" style="display:none" onclick="goTo('screen-attendance')"><span class="nav-icon">✅</span><span>Asistencia</span></button>
   <button class="nav-item maestro-only" id="nav-supervision" onclick="goTo('screen-supervision')" style="display:none;"><span class="nav-icon">👑</span><span>Supervisión</span></button>
   <button class="nav-item" id="nav-students" onclick="goTo('screen-students')"><span class="nav-icon">👥</span><span>Alumnos</span></button>
   <button class="nav-item" id="nav-books" onclick="goTo('screen-books')"><span class="nav-icon">📚</span><span>Cuadernillos</span></button>
@@ -1591,6 +1591,7 @@ function showStudentDetail(id) {
       const canEdit = currentRole !== 'maestro';
       const attCursor = canEdit ? 'cursor:pointer;touch-action:manipulation;' : 'cursor:default;';
       const globalClsNum2 = (mod-1)*4 + cls;
+      const clsDate = getClassDate(globalClsNum2);
       classesHtml += '<div class="class-btn ' + state + '" id="cbtn-' + s.id + '-' + mod + '-' + cls + '"' +
         (canEdit ? ' data-sid="' + s.id + '" data-level="' + s.level + '" data-mod="' + mod + '" data-cls="' + cls + '"' : '') +
         ' style="' + attCursor + '">' +
