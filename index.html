@@ -1304,20 +1304,7 @@ function showAttDetail(attId) {
     ${a.notes ? `<div class="divider"></div><div class="text-sm">📝 ${a.notes}</div>` : ''}
   `;
   showModal('modal-student-detail');
-  // Attach click handlers to class buttons via delegation
-  setTimeout(() => {
-    document.querySelectorAll('.class-btn[data-sid]').forEach(btn => {
-      btn.onclick = function() {
-        toggleClassAtt(
-          this.dataset.sid,
-          parseInt(this.dataset.level),
-          parseInt(this.dataset.mod),
-          parseInt(this.dataset.cls)
-        );
-      };
-    });
-  }, 50);
-} // end showStudentDetail
+}
 
 function toggleAtt(id) {
   const btn = document.getElementById('toggle-' + id);
@@ -1674,20 +1661,21 @@ function toggleMod(mod) {
   }
 }
 
-function toggleClassAtt(btnEl, studentId, level, mod, cls) {
-  // Find or create session
-  let session = db.attendance.find(a => a.level == level && a.module == mod && a.classNum == cls);
+
+function toggleClassAtt(studentId, level, mod, cls) {
+  level = parseInt(level); mod = parseInt(mod); cls = parseInt(cls);
+  let session = db.attendance.find(a => parseInt(a.level)==level && parseInt(a.module)==mod && parseInt(a.classNum)==cls);
   if (!session) {
     session = {
       id: 'manual-' + level + '-' + mod + '-' + cls + '-' + Date.now(),
-      date: new Date().toISOString().split('T')[0],
-      level: parseInt(level), module: parseInt(mod), classNum: parseInt(cls),
+      date: CLASS_DATES[(mod-1)*4 + cls - 1] || new Date().toISOString().split('T')[0],
+      level: level, module: mod, classNum: cls,
       presentIds: [], notes: 'Editado manualmente'
     };
     db.attendance.push(session);
   }
   if (!Array.isArray(session.presentIds)) session.presentIds = [];
-  
+
   const wasPresent = session.presentIds.includes(studentId);
   if (wasPresent) {
     session.presentIds = session.presentIds.filter(id => id !== studentId);
@@ -1697,25 +1685,23 @@ function toggleClassAtt(btnEl, studentId, level, mod, cls) {
   const isNowPresent = !wasPresent;
   save();
 
-  // Update the clicked button directly
-  if (btnEl && btnEl.classList) {
+  // Update button directly by ID
+  const btnEl = document.getElementById('cbtn-' + studentId + '-' + mod + '-' + cls);
+  if (btnEl) {
     btnEl.className = 'class-btn ' + (isNowPresent ? 'present' : 'absent');
-    // Find icon span inside button
     const spans = btnEl.getElementsByTagName('span');
     for (let i = 0; i < spans.length; i++) {
-      if (spans[i].className === 'class-icon') {
+      if (spans[i].className.indexOf('class-icon') >= 0) {
         spans[i].textContent = isNowPresent ? '✅' : '❌';
         break;
       }
     }
   }
 
-  // Update module header counts
   updateModHeader(studentId, level, mod);
 
-  // Update total attendance count
   const atts = getStudentAttendances(studentId);
-  const totEl = document.querySelector('#modal-student-detail .att-total');
+  const totEl = document.querySelector('.att-total-num');
   if (totEl) totEl.textContent = atts.present;
 
   showToast(isNowPresent ? '✅ Presente' : '❌ Ausente');
@@ -2763,9 +2749,11 @@ function _buildPDF() {
 // ══════════════════════════════════
 // INIT
 // ══════════════════════════════════
-load();
-document.getElementById('cfg-ciclo').value = db.config.ciclo;
-document.getElementById('att-date').value = new Date().toISOString().split('T')[0];
+window.addEventListener('DOMContentLoaded', function() {
+  load();
+  document.getElementById('cfg-ciclo').value = db.config.ciclo;
+  document.getElementById('att-date').value = new Date().toISOString().split('T')[0];
+});
 
 // PIN uses native input + anchor tags for iOS compatibility
 
