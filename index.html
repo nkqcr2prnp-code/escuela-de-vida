@@ -393,7 +393,17 @@ textarea { resize:vertical; }
   </div>
   <div class="card" id="att-form-card">
     <div class="card-title">📅 Datos de la Clase</div>
-    <div class="form-group"><label>Fecha</label><input type="date" id="att-date"></div>
+    <div class="form-group">
+      <label>Fecha de la clase</label>
+      <div id="att-date-display" style="background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:10px;padding:12px 16px;font-size:15px;font-weight:600;color:var(--gold);text-align:center;">
+        —
+      </div>
+      <input type="date" id="att-date" style="display:none;">
+    </div>
+    <div class="form-group">
+      <label>Clase global (1-12)</label>
+      <div id="att-global-num" style="font-size:13px;color:var(--text2);padding:4px 0;">—</div>
+    </div>
     <div class="form-group">
       <label>Módulo</label>
       <select id="att-module">
@@ -1191,13 +1201,34 @@ function setAttLevel(l) {
   renderAttendance();
 }
 
+function updateAttDate() {
+  const mod = parseInt(document.getElementById('att-module')?.value || 1);
+  const cls = parseInt(document.getElementById('att-class-num')?.value || 1);
+  const globalNum = (mod - 1) * 4 + cls;
+  const dateStr = CLASS_DATES[globalNum - 1] || '';
+  const display = document.getElementById('att-date-display');
+  const globalEl = document.getElementById('att-global-num');
+  const hiddenDate = document.getElementById('att-date');
+  if (display) {
+    if (dateStr) {
+      const [y,m,d] = dateStr.split('-');
+      display.textContent = d+'/'+m+'/'+y + ' (Martes)';
+      display.style.color = 'var(--gold)';
+    } else {
+      display.textContent = 'Fecha no configurada';
+      display.style.color = 'var(--text2)';
+    }
+  }
+  if (globalEl) globalEl.textContent = 'Clase '+globalNum+' de '+TOTAL_CLASSES;
+  if (hiddenDate && dateStr) hiddenDate.value = dateStr;
+}
+
 function renderAttendance() {
   if (currentRole === 'maestro') { renderAttendanceHistory(); return; }
   if (currentRole === 'enc1') currentAttLevel = 1;
   if (currentRole === 'enc2') currentAttLevel = 2;
   const students = db.students.filter(s => parseInt(s.level) === parseInt(currentAttLevel));
-  if (!document.getElementById('att-date').value)
-    document.getElementById('att-date').value = new Date().toISOString().split('T')[0];
+  updateAttDate();
   document.getElementById('att-count').textContent = students.length + ' alumnos';
 
   if (students.length === 0) {
@@ -1541,7 +1572,7 @@ function showStudentDetail(id) {
       const canEdit = currentRole !== 'maestro';
       const attClick = canEdit ? 'onclick="toggleClassAtt(\'' + s.id + '\',' + s.level + ',' + mod + ',' + cls + ')"' : '';
       classesHtml += '<div class="class-btn ' + state + '" ' + attClick + ' style="' + (canEdit?'cursor:pointer':'cursor:default') + '">' +
-        '<span class="class-num">C' + cls + '</span>' +
+        '<span class="class-num" style="font-size:9px;">' + getClassDate((mod-1)*4+cls) + '</span>' +
         '<span class="class-icon">' + icon + '</span>' +
         '</div>';
     }
@@ -1573,7 +1604,7 @@ function showStudentDetail(id) {
     <div class="flex-between mb-12" style="background:rgba(255,255,255,0.04);border-radius:10px;padding:10px 14px;">
       <div>
         <div style="font-size:11px;color:var(--text2);">Asistencias totales</div>
-        <div style="font-size:22px;font-weight:800;color:${ok?'var(--green)':'var(--red)'};">${atts.present} <span style="font-size:13px;color:var(--text2)">/ ${TOTAL_CLASSES} clases</span></div>
+        <div style="font-size:22px;font-weight:800;color:${ok?'var(--green)':'var(--red)'};" class="att-total">${atts.present} <span style="font-size:13px;color:var(--text2)">/ ${TOTAL_CLASSES} clases</span></div>
       </div>
       <span class="badge ${ok?'badge-green':'badge-red'}" style="font-size:13px;padding:6px 12px;">${ok?'🎓 Diploma':'⚠️ Sin diploma'}</span>
     </div>
@@ -1629,27 +1660,68 @@ function toggleClassAtt(studentId, level, mod, cls) {
     };
     db.attendance.push(session);
   }
-  // Toggle: empty/absent → present → absent → empty cycling
-  const idx = session.presentIds.indexOf(studentId);
-  if (idx >= 0) {
-    // was present → mark absent (remove from presentIds, keep session)
-    session.presentIds.splice(idx, 1);
+  if (!Array.isArray(session.presentIds)) session.presentIds = [];
+  
+  const wasPresent = session.presentIds.includes(studentId);
+  if (wasPresent) {
+    session.presentIds = session.presentIds.filter(id => id !== studentId);
   } else {
-    // was absent or empty → mark present
     session.presentIds.push(studentId);
   }
+  const isNowPresent = !wasPresent;
   save();
-  // Refresh the detail modal in place
-  const s = db.students.find(st => st.id === studentId);
-  if (s) {
-    // Re-open same accordions
-    const openMods = [1,2,3].filter(m => document.getElementById('mod-body-'+m)?.classList.contains('open'));
-    showStudentDetail(studentId);
-    setTimeout(() => openMods.forEach(m => {
-      document.getElementById('mod-body-'+m)?.classList.add('open');
-    }), 50);
+
+  // Update DOM directly — no re-render needed
+  // Find the class button by its onclick attribute context
+  const btns = document.querySelectorAll('.class-btn');
+  btns.forEach(btn => {
+    const oc = btn.getAttribute('onclick') || '';
+    const sidMarker = '&quot;'+studentId+'&quot;';
+    const sidMarker2 = '"'+studentId+'"';
+    if ((oc.includes(sidMarker) || oc.includes(sidMarker2)) && oc.includes(','+mod+','+cls+')')) {
+      btn.className = 'class-btn ' + (isNowPresent ? 'present' : 'absent');
+      btn.querySelector('.class-icon').textContent = isNowPresent ? '✅' : '❌';
+    }
+  });
+
+  // Update module header counts
+  updateModHeader(studentId, level, mod);
+
+  // Update total attendance count
+  const atts = getStudentAttendances(studentId);
+  const totEl = document.querySelector('#modal-student-detail .att-total');
+  if (totEl) totEl.textContent = atts.present;
+
+  showToast(isNowPresent ? '✅ Presente' : '❌ Ausente');
+}
+
+function updateModHeader(studentId, level, mod) {
+  let modPresent = 0, modAbsent = 0;
+  for (let cls = 1; cls <= 4; cls++) {
+    const session = db.attendance.find(a => a.level == level && a.module == mod && a.classNum == cls);
+    if (session) {
+      const pids = Array.isArray(session.presentIds) ? session.presentIds : [];
+      if (pids.includes(studentId)) modPresent++; else modAbsent++;
+    }
   }
-  showToast(idx >= 0 ? '❌ Marcado como ausente' : '✅ Marcado como presente');
+  // Find badges in mod header
+  const modBody = document.getElementById('mod-body-' + mod);
+  if (!modBody) return;
+  const header = modBody.previousElementSibling;
+  if (!header) return;
+  const badges = header.querySelectorAll('.badge');
+  if (badges[0]) badges[0].textContent = modPresent + ' ✅';
+  if (badges[1]) badges[1].textContent = modAbsent + ' ❌';
+
+  // Auto-close module when all 4 classes are marked
+  const totalMarked = modPresent + modAbsent;
+  if (totalMarked === 4 && modBody.classList.contains('open')) {
+    setTimeout(() => {
+      modBody.classList.remove('open');
+      const arrow = document.getElementById('mod-arrow-' + mod);
+      if (arrow) arrow.textContent = '›';
+    }, 400);
+  }
 }
 
 function deleteStudent(id) {
