@@ -458,13 +458,19 @@ textarea { resize:vertical; }
 <!-- CUADERNILLOS -->
 <div class="screen" id="screen-books">
   <div class="screen-title">Cuadernillos</div>
-  <div class="screen-sub">Control de ventas y fiados</div>
+  <div class="screen-sub">Vista global · ventas · fiados · fondo</div>
+
+  <div class="card" id="books-global-summary" style="margin-bottom:12px;"></div>
+
+  <div class="section-sep"><span>💰 Deudores</span></div>
+  <div id="books-debtors"></div>
+
+  <div class="section-sep" style="margin-top:10px;"><span>📚 Por Nivel</span></div>
   <div class="level-tabs" id="book-level-tabs">
     <button class="level-tab active" id="book-tab-1" onclick="setBookLevel(1)">Nivel 1</button>
     <button class="level-tab" id="book-tab-2" onclick="setBookLevel(2)">Nivel 2</button>
   </div>
   <div class="card" id="books-summary"></div>
-  <div class="section-sep"><span>Registro por alumno</span></div>
   <div id="books-list"></div>
 </div>
 
@@ -542,7 +548,7 @@ textarea { resize:vertical; }
 <!-- ════ BOTTOM NAV ════ -->
 <nav class="bottom-nav">
   <button class="nav-item active" id="nav-home" onclick="goTo('screen-home')"><span class="nav-icon">🏠</span><span>Inicio</span></button>
-  <button class="nav-item enc-only" id="nav-attendance" style="display:none" onclick="goTo('screen-attendance')"><span class="nav-icon">✅</span><span>Asistencia</span></button>
+  <button class="nav-item" id="nav-attendance" style="display:none!important" onclick="goTo('screen-attendance')"><span class="nav-icon">✅</span><span>Asistencia</span></button>
   <button class="nav-item maestro-only" id="nav-supervision" onclick="goTo('screen-supervision')" style="display:none;"><span class="nav-icon">👑</span><span>Supervisión</span></button>
   <button class="nav-item" id="nav-students" onclick="goTo('screen-students')"><span class="nav-icon">👥</span><span>Alumnos</span></button>
   <button class="nav-item" id="nav-books" onclick="goTo('screen-books')"><span class="nav-icon">📚</span><span>Cuadernillos</span></button>
@@ -1105,7 +1111,7 @@ function goTo(screenId) {
   if (screenId === 'screen-home') renderHome();
   if (screenId === 'screen-attendance') renderAttendance();
   if (screenId === 'screen-students') loadAndRenderStudents();
-  if (screenId === 'screen-books') renderBooks();
+  if (screenId === 'screen-books') { renderGlobalBooks(); renderBooks(); }
   if (screenId === 'screen-reports') renderReports();
   if (screenId === 'screen-supervision') renderSupervision();
 }
@@ -1304,14 +1310,7 @@ function showAttDetail(attId) {
     ${a.notes ? `<div class="divider"></div><div class="text-sm">📝 ${a.notes}</div>` : ''}
   `;
   showModal('modal-student-detail');
-  // Attach click handlers to class buttons
-  setTimeout(function() {
-    document.querySelectorAll('.class-btn[data-sid]').forEach(function(btn) {
-      btn.onclick = function() {
-        toggleClassAtt(this.dataset.sid, parseInt(this.dataset.level), parseInt(this.dataset.mod), parseInt(this.dataset.cls));
-      };
-    });
-  }, 100);
+  // click handlers via inline onclick
 } // end showStudentDetail
 
 function toggleAtt(id) {
@@ -1592,8 +1591,9 @@ function showStudentDetail(id) {
       const attCursor = canEdit ? 'cursor:pointer;touch-action:manipulation;' : 'cursor:default;';
       const globalClsNum2 = (mod-1)*4 + cls;
       const clsDate = getClassDate(globalClsNum2);
+      const onclickAttr = canEdit ? ' onclick="toggleClassAtt(' + "'" + s.id + "'" + ',' + s.level + ',' + mod + ',' + cls + ')"' : '';
       classesHtml += '<div class="class-btn ' + state + '" id="cbtn-' + s.id + '-' + mod + '-' + cls + '"' +
-        (canEdit ? ' data-sid="' + s.id + '" data-level="' + s.level + '" data-mod="' + mod + '" data-cls="' + cls + '"' : '') +
+        onclickAttr +
         ' style="' + attCursor + '">' +
         '<span class="class-num" style="font-size:9px;">' + clsDate + '</span>' +
         '<span class="class-icon">' + icon + '</span>' +
@@ -1680,29 +1680,44 @@ function toggleClassAtt(studentId, level, mod, cls) {
       id: 'manual-' + level + '-' + mod + '-' + cls + '-' + Date.now(),
       date: CLASS_DATES[(mod-1)*4 + cls - 1] || new Date().toISOString().split('T')[0],
       level: level, module: mod, classNum: cls,
-      presentIds: [], notes: 'Editado manualmente'
+      presentIds: [], absentIds: [], notes: 'Editado manualmente'
     };
     db.attendance.push(session);
   }
   if (!Array.isArray(session.presentIds)) session.presentIds = [];
+  if (!Array.isArray(session.absentIds)) session.absentIds = [];
 
-  const wasPresent = session.presentIds.includes(studentId);
-  if (wasPresent) {
-    session.presentIds = session.presentIds.filter(id => id !== studentId);
-  } else {
+  // Cycle: empty -> present -> absent -> empty
+  const isPresent = session.presentIds.includes(studentId);
+  const isAbsent = session.absentIds.includes(studentId);
+
+  // Remove from both first
+  session.presentIds = session.presentIds.filter(id => id !== studentId);
+  session.absentIds = session.absentIds.filter(id => id !== studentId);
+
+  let newState;
+  if (!isPresent && !isAbsent) {
+    // was empty -> now present
     session.presentIds.push(studentId);
+    newState = 'present';
+  } else if (isPresent) {
+    // was present -> now absent
+    session.absentIds.push(studentId);
+    newState = 'absent';
+  } else {
+    // was absent -> now empty
+    newState = 'empty';
   }
-  const isNowPresent = !wasPresent;
   save();
 
-  // Update button directly by ID
+  // Update button
   const btnEl = document.getElementById('cbtn-' + studentId + '-' + mod + '-' + cls);
   if (btnEl) {
-    btnEl.className = 'class-btn ' + (isNowPresent ? 'present' : 'absent');
+    btnEl.className = 'class-btn ' + newState;
     const spans = btnEl.getElementsByTagName('span');
     for (let i = 0; i < spans.length; i++) {
       if (spans[i].className.indexOf('class-icon') >= 0) {
-        spans[i].textContent = isNowPresent ? '✅' : '❌';
+        spans[i].textContent = newState === 'present' ? '✅' : newState === 'absent' ? '❌' : '⬜';
         break;
       }
     }
@@ -1714,7 +1729,22 @@ function toggleClassAtt(studentId, level, mod, cls) {
   const totEl = document.querySelector('.att-total-num');
   if (totEl) totEl.textContent = atts.present;
 
-  showToast(isNowPresent ? '✅ Presente' : '❌ Ausente');
+  // Update diploma badge
+  const s = db.students.find(st => st.id === studentId);
+  if (s) {
+    const ok = atts.present >= (DIPLOMA_MIN[s.level] || 7);
+    document.querySelectorAll('.badge').forEach(el => {
+      if (el.textContent.includes('Diploma') || el.textContent.includes('Sin diploma')) {
+        el.className = 'badge ' + (ok ? 'badge-green' : 'badge-red');
+        el.textContent = ok ? '🎓 Diploma' : '⚠️ Sin diploma';
+      }
+    });
+    const totalDiv = document.querySelector('.att-total');
+    if (totalDiv) totalDiv.style.color = ok ? 'var(--green)' : 'var(--red)';
+  }
+
+  const toastMsg = newState === 'present' ? '✅ Presente' : newState === 'absent' ? '❌ Ausente' : '⬜ Sin registrar';
+  showToast(toastMsg);
 }
 
 function updateModHeader(studentId, level, mod) {
@@ -1771,13 +1801,15 @@ function showDeleteConfirm(id, nombre) {
 function getStudentAttendances(studentId) {
   const st = db.students.find(s => s.id === studentId);
   if (!st) return { present:0, absent:0, total:0 };
-  let present=0, total=0;
+  let present=0, absent=0;
   (db.attendance || []).filter(a => a && a.level == st.level).forEach(a => {
-    total++;
-    const ids = Array.isArray(a.presentIds) ? a.presentIds : [];
-    if (ids.includes(studentId)) present++;
+    const pids = Array.isArray(a.presentIds) ? a.presentIds : [];
+    const aids = Array.isArray(a.absentIds) ? a.absentIds : [];
+    if (pids.includes(studentId)) present++;
+    else if (aids.includes(studentId)) absent++;
+    // else: empty, don't count
   });
-  return { present, absent:total-present, total };
+  return { present, absent, total: present + absent };
 }
 
 function getClassRecord(studentId, level, classNumber) {
@@ -2564,10 +2596,13 @@ function _buildPDF() {
     
     const lvlNames = { 1: 'Un Nuevo Comienzo — Nuevos Creyentes', 2: 'Conociendo al Señor — Proceso Discipulado' };
     const diplomaMin = DIPLOMA_MIN[lvl];
+    // Classify students: diploma, recover, repeat
+    // N1: 0-5 faltas (7+ present) = diploma; 6-7 faltas (5-6 present) = recuperar; 8+ faltas (<=4) = repetir
+    // N2: 0-4 faltas (8+ present) = diploma; 5-7 faltas (5-7 present) = recuperar; 8+ faltas (<=4) = repetir
     const withDiploma = lvlStudents.filter(s => getStudentAttendances(s.id).present >= diplomaMin);
     const noDiploma = lvlStudents.filter(s => getStudentAttendances(s.id).present < diplomaMin);
-    const toRecover = noDiploma.filter(s => getStudentAttendances(s.id).present >= diplomaMin - 3);
-    const toRepeat = noDiploma.filter(s => getStudentAttendances(s.id).present < diplomaMin - 3);
+    const toRecover = noDiploma.filter(s => getStudentAttendances(s.id).present >= 5);
+    const toRepeat = noDiploma.filter(s => getStudentAttendances(s.id).present < 5);
     const pctLvl = lvlStudents.length ? Math.round(withDiploma.length/lvlStudents.length*100) : 0;
     
     checkNewPage(40);
@@ -2639,9 +2674,9 @@ function _buildPDF() {
       doc.text(liderTxt.length > 18 ? liderTxt.substr(0,16)+'...' : liderTxt, colX[3] + 1.5, y + 4);
       doc.text(`${atts.present}/12`, colX[4] + 1.5, y + 4);
       
-      if (hasDiploma) { setFont('bold', 7, GREEN); doc.text('Diploma', colX[5] + 1.5, y + 4); }
-      else if (atts.present >= diplomaMin - 3) { setFont('normal', 7, [200, 120, 0]); doc.text('Recuperar', colX[5] + 1.5, y + 4); }
-      else { setFont('normal', 7, RED); doc.text('Repetir', colX[5] + 1.5, y + 4); }
+      if (hasDiploma) { setFont('bold', 7, GREEN); doc.text('🎓 Diploma', colX[5] + 1.5, y + 4); }
+      else if (atts.present >= 5) { setFont('normal', 7, [200, 120, 0]); doc.text('⚠ Recuperar', colX[5] + 1.5, y + 4); }
+      else { setFont('normal', 7, RED); doc.text('✗ Repetir N'+lvl, colX[5] + 1.5, y + 4); }
       
       // bottom border
       drawLine(MARGIN, y + 6, MARGIN + CONTENT_W, [220, 225, 235], 0.1);
@@ -2703,6 +2738,86 @@ function _buildPDF() {
       });
     });
     
+    // ── RECOVERY SECTION ──
+    if (toRecover.length > 0) {
+      checkNewPage(30);
+      setFont('bold', 9, [200, 120, 0]);
+      doc.text('Alumnos que deben Recuperar Clases', MARGIN, y);
+      y += 5;
+      
+      fillRect(MARGIN, y, CONTENT_W, 6, [255, 248, 220], 0);
+      doc.setDrawColor(200, 120, 0);
+      doc.setLineWidth(0.1);
+      doc.rect(MARGIN, y, CONTENT_W, 6, 'S');
+      setFont('bold', 7.5, [150, 80, 0]);
+      doc.text('Alumno', MARGIN + 1.5, y + 4);
+      doc.text('Asist.', MARGIN + 80, y + 4);
+      doc.text('Faltas', MARGIN + 100, y + 4);
+      doc.text('Clases a recuperar (módulo:clase)', MARGIN + 120, y + 4);
+      y += 6;
+      
+      toRecover.forEach((s, idx) => {
+        // Find which classes were absent
+        const missedClasses = [];
+        for (let mod = 1; mod <= 3; mod++) {
+          for (let cls = 1; cls <= 4; cls++) {
+            const session = db.attendance.find(a => a.level == lvl && a.module == mod && a.classNum == cls);
+            if (session) {
+              const pids = Array.isArray(session.presentIds) ? session.presentIds : [];
+              const aids = Array.isArray(session.absentIds) ? session.absentIds : [];
+              if (aids.includes(s.id)) missedClasses.push('M' + mod + ':C' + cls);
+            }
+          }
+        }
+        
+        checkNewPage(7);
+        const atts = getStudentAttendances(s.id);
+        const absent = 12 - atts.present;
+        const bgColor = idx % 2 === 0 ? [255, 253, 235] : [255, 250, 210];
+        fillRect(MARGIN, y, CONTENT_W, 6, bgColor, 0);
+        setFont('normal', 7.5, [30,30,30]);
+        doc.text(s.apellido + ', ' + s.nombre, MARGIN + 1.5, y + 4);
+        doc.text(atts.present + '/12', MARGIN + 80, y + 4);
+        setFont('bold', 7.5, [200, 80, 0]);
+        doc.text(String(absent), MARGIN + 100, y + 4);
+        setFont('normal', 7, [30,30,30]);
+        const recovText = missedClasses.length > 0 ? missedClasses.join('  ') : '(ver registro)';
+        doc.text(recovText.length > 45 ? recovText.substr(0, 43) + '...' : recovText, MARGIN + 120, y + 4);
+        y += 6;
+      });
+      y += 5;
+    }
+    
+    // ── REPEAT SECTION ──
+    if (toRepeat.length > 0) {
+      checkNewPage(25);
+      setFont('bold', 9, RED);
+      doc.text('Alumnos que deben Repetir Nivel ' + lvl, MARGIN, y);
+      y += 5;
+      
+      fillRect(MARGIN, y, CONTENT_W, 6, [254, 242, 242], 0);
+      setFont('bold', 7.5, RED);
+      doc.text('Alumno', MARGIN + 1.5, y + 4);
+      doc.text('Asistencias', MARGIN + 90, y + 4);
+      doc.text('Faltas', MARGIN + 130, y + 4);
+      y += 6;
+      
+      toRepeat.forEach((s, idx) => {
+        checkNewPage(7);
+        const atts = getStudentAttendances(s.id);
+        const absent = 12 - atts.present;
+        fillRect(MARGIN, y, CONTENT_W, 6, idx % 2 === 0 ? [255, 252, 252] : [254, 246, 246], 0);
+        setFont('normal', 7.5, [30,30,30]);
+        doc.text(s.apellido + ', ' + s.nombre, MARGIN + 1.5, y + 4);
+        setFont('normal', 7.5, [30,30,30]);
+        doc.text(atts.present + '/12', MARGIN + 90, y + 4);
+        setFont('bold', 7.5, RED);
+        doc.text(String(absent), MARGIN + 130, y + 4);
+        y += 6;
+      });
+      y += 5;
+    }
+
     if (debtList.length > 0) {
       checkNewPage(30);
       setFont('bold', 9, RED);
