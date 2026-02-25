@@ -814,6 +814,17 @@ let reportText = '';
 const MODULES = ['Creciendo Hacia Adentro', 'Creciendo Hacia Arriba', 'Creciendo Hacia Afuera'];
 const DIPLOMA_MIN = { 1: 7, 2: 8 };
 const TOTAL_CLASSES = 12;
+const CLASS_DATES = [
+  '2026-01-27','2026-02-03','2026-02-10','2026-02-17',
+  '2026-02-24','2026-03-03','2026-03-10','2026-03-17',
+  '2026-03-24','2026-03-31','2026-04-07','2026-04-14'
+];
+function getClassDate(n) {
+  const d = CLASS_DATES[n-1];
+  if (!d) return 'C'+n;
+  const [y,m,day] = d.split('-');
+  return day+'/'+m;
+}
 
 // ══════════════════════════════════
 // STORAGE
