@@ -1582,7 +1582,7 @@ function showStudentDetail(id) {
       const icon = state==='present' ? '✅' : state==='absent' ? '❌' : '⬜';
       const canEdit = currentRole !== 'maestro';
       const attClick = canEdit ? 'onclick="toggleClassAtt(\'' + s.id + '\',' + s.level + ',' + mod + ',' + cls + ')"' : '';
-      classesHtml += '<div class="class-btn ' + state + '" ' + attClick + ' style="' + (canEdit?'cursor:pointer':'cursor:default') + '">' +
+      classesHtml += '<div class="class-btn ' + state + '" id="cbtn-' + s.id + '-' + mod + '-' + cls + '" ' + attClick + ' style="' + (canEdit?'cursor:pointer':'cursor:default') + '">' +
         '<span class="class-num" style="font-size:9px;">' + getClassDate((mod-1)*4+cls) + '</span>' +
         '<span class="class-icon">' + icon + '</span>' +
         '</div>';
@@ -1683,10 +1683,16 @@ function toggleClassAtt(btnEl, studentId, level, mod, cls) {
   save();
 
   // Update the clicked button directly
-  if (btnEl) {
+  if (btnEl && btnEl.classList) {
     btnEl.className = 'class-btn ' + (isNowPresent ? 'present' : 'absent');
-    const iconEl = btnEl.querySelector('.class-icon');
-    if (iconEl) iconEl.textContent = isNowPresent ? '✅' : '❌';
+    // Find icon span inside button
+    const spans = btnEl.getElementsByTagName('span');
+    for (let i = 0; i < spans.length; i++) {
+      if (spans[i].className === 'class-icon') {
+        spans[i].textContent = isNowPresent ? '✅' : '❌';
+        break;
+      }
+    }
   }
 
   // Update module header counts
